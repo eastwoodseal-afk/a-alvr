@@ -1,3 +1,16 @@
+/* Custom scrollbar for ShotDetailModal */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #222;
+  border-radius: 4px;
+}
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #222 transparent;
+}
 @import "tailwindcss";
 
 :root {
