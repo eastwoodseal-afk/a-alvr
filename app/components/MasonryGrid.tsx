@@ -9,19 +9,14 @@ interface Shot {
   title?: string;
   description?: string;
   username?: string;
+  user_id?: string;
+  author?: string;
 }
 
 interface MasonryGridProps {
-  shots: Array<{
-    id: string;
-    image_url: string;
-    title?: string;
-    description?: string;
-    username?: string;
-    user_id?: string;
-  }>;
-  setShots?: (shots: Array<any>) => void;
-  setSelectedShot?: (shot: any) => void;
+  shots: Shot[];
+  setShots?: (shots: Shot[]) => void;
+  setSelectedShot?: (shot: Shot) => void;
 }
 
 export default function MasonryGrid({ shots, setShots, setSelectedShot }: MasonryGridProps) {

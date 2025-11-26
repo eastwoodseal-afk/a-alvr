@@ -37,7 +37,12 @@ export default function UserShots({ userId }: { userId: string }) {
         }
       }
       // Asignar username a cada shot
-      const shotsWithUsername = (data || []).map(shot => ({ ...shot, user_id: shot.user_id || userId, username }));
+      const shotsWithUsername = (data || []).map(shot => ({
+        ...shot,
+        user_id: shot.user_id || userId,
+        username,
+        author: shot.author || username || "sin autor"
+      }));
       setShots(shotsWithUsername);
       setLoading(false);
     }

@@ -30,7 +30,11 @@ export default function HomeView() {
           }
         }
         // Asignar username a cada shot
-        setShots(data.map((shot) => ({ ...shot, username: profilesMap[shot.user_id] || "sin Creador" })));
+        setShots(data.map((shot) => ({
+          ...shot,
+          username: profilesMap[shot.user_id] || "sin Creador",
+          author: shot.author || profilesMap[shot.user_id] || "sin autor"
+        })));
       } else {
         setShots([]);
       }
