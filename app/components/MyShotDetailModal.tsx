@@ -1,7 +1,25 @@
 import React, { useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 
-export default function MyShotDetailModal({ shot, user, onClose, setShots, shots }) {
+interface Shot {
+  id: string;
+  image_url: string;
+  title?: string;
+  description?: string;
+  username?: string;
+  user_id?: string;
+  author?: string;
+}
+
+interface MyShotDetailModalProps {
+  shot: Shot;
+  user: any;
+  onClose: () => void;
+  setShots: (shots: Shot[]) => void;
+  shots: Shot[];
+}
+
+export default function MyShotDetailModal({ shot, user, onClose, setShots, shots }: MyShotDetailModalProps) {
     // Log temporal para depuración
     console.log('Modal user:', user);
     console.log('Modal shot.user_id:', shot?.user_id);
@@ -45,11 +63,13 @@ export default function MyShotDetailModal({ shot, user, onClose, setShots, shots
           }}
           onLoad={e => {
             const img = e.currentTarget;
-            if (window.innerWidth >= 640) {
-              const naturalWidth = Math.min(img.naturalWidth, 1600);
-              img.parentElement.style.width = naturalWidth + 'px';
-            } else {
-              img.parentElement.style.width = '100%';
+            if (img.parentElement) {
+              if (window.innerWidth >= 640) {
+                const naturalWidth = Math.min(img.naturalWidth, 1600);
+                img.parentElement.style.width = naturalWidth + 'px';
+              } else {
+                img.parentElement.style.width = '100%';
+              }
             }
           }}
         />

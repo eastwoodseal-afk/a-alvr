@@ -1,14 +1,25 @@
 "use client";
+
 import React, { useEffect, useState } from "react";
 import MasonryGrid from "./MasonryGrid";
 import MyShotDetailModal from "./MyShotDetailModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../lib/AuthContext";
 
+interface Shot {
+  id: string;
+  image_url: string;
+  title?: string;
+  description?: string;
+  username?: string;
+  user_id?: string;
+  author?: string;
+}
+
 export default function UserShots({ userId }: { userId: string }) {
   const [shots, setShots] = useState<Array<{ id: string; image_url: string; title?: string; description?: string; user_id?: string }>>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedShot, setSelectedShot] = useState(null);
+  const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -56,7 +67,7 @@ export default function UserShots({ userId }: { userId: string }) {
     {selectedShot && (
       <MyShotDetailModal
         shot={selectedShot}
-        user={user?.getUser ? user.getUser() : user}
+        user={user}
         onClose={() => setSelectedShot(null)}
         setShots={setShots}
         shots={shots}

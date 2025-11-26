@@ -1,8 +1,19 @@
 "use client";
+
 import React, { useEffect, useState } from "react";
 import MasonryGrid from "../components/MasonryGrid";
 import ShotDetailModal from "../components/ShotDetailModal";
 import { supabase } from "../../lib/supabaseClient";
+
+interface Shot {
+  id: string;
+  image_url: string;
+  title?: string;
+  description?: string;
+  username?: string;
+  user_id?: string;
+  author?: string;
+}
 
 export default function HomeView() {
   const [shots, setShots] = useState<Array<{ id: string; image_url: string; title?: string; description?: string; user_id: string; username: string }>>([]);
@@ -43,7 +54,7 @@ export default function HomeView() {
     fetchShots();
   }, []);
 
-  const [selectedShot, setSelectedShot] = useState(null);
+  const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
   return (
     <section className="p-2">
       {loading ? (

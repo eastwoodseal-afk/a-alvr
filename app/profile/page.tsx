@@ -29,6 +29,11 @@ export default function ProfilePage() {
     setSaving(true);
     setError("");
     setSuccess("");
+    if (!user) {
+      setSaving(false);
+      setError("No hay usuario.");
+      return;
+    }
     const { error } = await supabase
       .from("profiles")
       .update({ username })
