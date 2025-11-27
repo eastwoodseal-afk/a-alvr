@@ -23,7 +23,8 @@ export default function ShotDetailModal({ shot, onClose }: { shot: Shot; onClose
         }}
       >
         <button
-          className="absolute top-4 right-4 bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center text-xl font-bold shadow"
+          className="absolute right-4 top-1/2 -translate-y-1/2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center text-xl font-bold shadow"
+          style={{transform: 'translateY(-50%)'}}
           onClick={onClose}
           aria-label="Cerrar"
         >
@@ -53,9 +54,10 @@ export default function ShotDetailModal({ shot, onClose }: { shot: Shot; onClose
           }}
         />
         <div className="w-full text-left">
-          <div className="text-lg text-yellow-400 font-bold mb-2">
-            {shot.author || "sin autor"}
-          </div>
+          {/* Autor del shot: solo si existe */}
+          {shot.author && (
+            <div className="text-lg text-yellow-400 font-bold mb-2">{shot.author}</div>
+          )}
           {shot.title && <div className="text-lg font-bold text-yellow-400 mb-2">{shot.title}</div>}
           {shot.description && <div className="text-base text-gray-200 mb-2">{shot.description}</div>}
           <div className="text-xs text-gray-400 mt-2">Usuario: {shot.username || "sin username"}</div>

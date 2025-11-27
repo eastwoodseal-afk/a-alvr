@@ -41,7 +41,7 @@ export default function Header() {
   }, [user]);
   useEffect(() => {
     if (user === null && !loading) {
-      router.replace("/");
+      router.replace(process.env.NEXT_PUBLIC_BASE_URL ? process.env.NEXT_PUBLIC_BASE_URL + "/" : "/");
     }
   }, [user, loading, router]);
 
@@ -105,7 +105,7 @@ export default function Header() {
                   setShowMenu(false);
                   setShowModal(false);
                 } else {
-                  window.location.href = "/";
+                  window.location.href = process.env.NEXT_PUBLIC_BASE_URL ? process.env.NEXT_PUBLIC_BASE_URL + "/" : "/";
                 }
               }}
             >
@@ -199,15 +199,17 @@ export default function Header() {
       {showShotsOverlay && (
         <div className="fixed inset-0 top-[56px] z-20 flex flex-col items-center justify-start" style={{ minHeight: 'calc(100vh - 56px)', background: '#0a1833' }}>
           <div className="w-full rounded-b-2xl shadow-2xl p-2 pt-2 text-gray-200 flex flex-col items-center relative" style={{ minHeight: 'calc(100vh - 56px)', background: 'transparent' }}>
-            <div className="w-full flex items-center justify-between px-4 py-3 sticky top-0 bg-[#0a1833] z-10" style={{ borderBottom: '1px solid #facc15' }}>
-              <h2 className="text-left text-base font-semibold">Mis Shots</h2>
+            <div className="w-full flex items-center px-4 py-3 sticky top-0 bg-[#0a1833] z-10" style={{ borderBottom: '1px solid #facc15' }}>
               <button
-                className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center text-xl font-bold shadow ml-2"
+                className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center text-xl font-bold shadow mr-2"
                 onClick={() => setShowShotsOverlay(false)}
                 aria-label="Cerrar"
               >
-                &times;
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
               </button>
+              <h2 className="text-left text-base font-semibold">Mis Shots</h2>
             </div>
             <div className="w-full flex-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
               {/* Shots del usuario */}

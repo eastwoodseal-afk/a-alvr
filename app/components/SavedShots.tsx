@@ -23,24 +23,34 @@ export default function SavedShots({ userId, filterBoardId }: SavedShotsProps) {
       if (!userId) return;
       setLoading(true);
       let shotsData = [];
-      if (filterBoardId) {
-        // Obtener shots del tablero seleccionado
-        const { data, error } = await supabase
-          .from("board_shots")
-          .select("*, shots(*)")
-          .eq("board_id", filterBoardId)
-          .order("created_at", { ascending: false });
-        if (!error && data) shotsData = data;
-      } else {
-          // Consulta los shots guardados del usuario, incluyendo relación con board_shots
-          const { data, error } = await supabase
-            .from("saved_shots")
-            .select("*, shots(*, board_shots(*))")
-            .eq("user_id", userId)
-            .order("created_at", { ascending: false });
-          if (!error && data) shotsData = data;
+      let profilesMap: Record<string, string> = {};
+      // Obtener todos los shots guardados
+      const { data: savedShotsData, error: savedShotsError } = await supabase
+        .from("saved_shots")
+        .select("*, shots(*, board_shots(*), user_id)")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+      if (!savedShotsError && savedShotsData) shotsData = savedShotsData;
+      // Obtener los user_id únicos de los shots
+      const userIds = [...new Set(shotsData.map((item: any) => item.shots?.user_id).filter(Boolean))];
+      if (userIds.length) {
+        const { data: profiles } = await supabase.from("profiles").select("id, username").in("id", userIds);
+        if (profiles) {
+          profilesMap = profiles.reduce((acc: { [key: string]: string }, profile: any) => {
+            acc[profile.id] = profile.username || "sin username";
+            return acc;
+          }, {});
+        }
       }
-      setShots(shotsData || []);
+      // Asignar username a cada shot
+      const shotsWithUsername = shotsData.map((item: any) => ({
+        ...item,
+        shots: {
+          ...item.shots,
+          username: profilesMap[item.shots?.user_id] || "sin username"
+        }
+      }));
+      setShots(shotsWithUsername || []);
       setLoading(false);
     }
     fetchSavedShots();
@@ -55,8 +65,13 @@ export default function SavedShots({ userId, filterBoardId }: SavedShotsProps) {
       <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-6 gap-2 w-full xl:w-screen xl:max-w-none">
         {shots.map((item, idx) => {
           const shotId = item.shots?.id;
-          // Filtrar en la vista general: ocultar si está en hiddenShots o si está en algún tablero
-          if (!filterBoardId) {
+          // Si hay filtro de tablero, solo mostrar los shots que pertenecen a ese tablero
+          if (filterBoardId) {
+            // Si el shot no tiene board_shots o no pertenece al tablero, no mostrarlo
+            const belongsToBoard = item.shots?.board_shots?.some((bs: any) => bs.board_id === filterBoardId);
+            if (!belongsToBoard) return null;
+          } else {
+            // Filtrar en la vista general: ocultar si está en hiddenShots o si está en algún tablero
             if (hiddenShots.includes(shotId)) return null;
             if (item.shots?.board_shots && item.shots.board_shots.length > 0) return null;
           }
@@ -64,12 +79,19 @@ export default function SavedShots({ userId, filterBoardId }: SavedShotsProps) {
             <div
               key={item.id || item.shot_id || idx}
               className="mb-2 break-inside-avoid rounded-lg overflow-hidden shadow bg-gray-800 cursor-pointer hover:ring-2 hover:ring-yellow-500 transition relative"
-              onClick={() => setSelectedShot(item.shots)}
+              onClick={() => {
+                // Si necesitas redirección absoluta, usa la variable
+                // window.location.href = process.env.NEXT_PUBLIC_BASE_URL + "/shots/" + shotId;
+                setSelectedShot(item.shots);
+              }}
             >
               {item.shots?.image_url && (
                 <img src={item.shots.image_url} alt={item.shots.title || "Shot"} className="w-full object-cover" />
               )}
-              <div className="px-2 pt-2 text-xs text-gray-400 font-semibold">{item.shots?.username || "sin Creador"}</div>
+              {/* Mostrar author solo si existe */}
+              {item.shots?.author && (
+                <div className="px-2 pt-2 text-yellow-400 font-bold text-sm">{item.shots.author}</div>
+              )}
               {item.shots?.title && <div className="px-2 py-2 font-semibold text-gray-200">{item.shots.title}</div>}
               {item.shots?.description && <div className="px-2 pb-2 text-gray-300 text-sm">{item.shots.description}</div>}
               {/* Checkbox para seleccionar solo si no se está filtrando por tablero */}
@@ -112,9 +134,16 @@ export default function SavedShots({ userId, filterBoardId }: SavedShotsProps) {
             </button>
             <img src={selectedShot.image_url} alt={selectedShot.title || "Shot"} className="w-full max-h-[60vh] object-contain rounded-lg mb-4" />
             <div className="w-full text-left">
-              <div className="text-xs text-gray-400 font-semibold mb-2">{selectedShot.username || "sin Creador"}</div>
+              {/* Mostrar author solo si existe */}
+              {selectedShot.author && (
+                <div className="text-lg text-yellow-400 font-bold mb-2">{selectedShot.author}</div>
+              )}
               {selectedShot.title && <div className="text-lg font-bold text-yellow-400 mb-2">{selectedShot.title}</div>}
               {selectedShot.description && <div className="text-base text-gray-200 mb-2">{selectedShot.description}</div>}
+              {/* Mostrar username hasta abajo */}
+              {selectedShot.username && (
+                <div className="text-xs text-gray-400 font-semibold mt-4">{selectedShot.username}</div>
+              )}
             </div>
           </div>
         </div>

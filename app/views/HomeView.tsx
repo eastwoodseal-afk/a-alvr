@@ -44,7 +44,7 @@ export default function HomeView() {
         setShots(data.map((shot) => ({
           ...shot,
           username: profilesMap[shot.user_id] || "sin Creador",
-          author: shot.author || profilesMap[shot.user_id] || "sin autor"
+          author: shot.author ? shot.author : undefined
         })));
       } else {
         setShots([]);
@@ -55,6 +55,8 @@ export default function HomeView() {
   }, []);
 
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
+  // Ejemplo de uso de la variable para compartir enlace
+  // const shareUrl = process.env.NEXT_PUBLIC_BASE_URL + "/";
   return (
     <section className="p-2">
       {loading ? (

@@ -44,7 +44,7 @@ export default function Footer() {
         </div>
         {showMenu && (
           <div id="footer-menu-dropdown" className="absolute bottom-10 right-0 flex flex-col items-end gap-2 z-50">
-            <button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center shadow" aria-label="Subir archivo" onClick={() => { setModalSection(1); setShowMenu(false); }}>
+            <button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center shadow" aria-label="Subir archivo" onClick={() => { /* window.location.href = process.env.NEXT_PUBLIC_BASE_URL + "/upload"; */ setModalSection(1); setShowMenu(false); }}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 10l-4-4m0 0l-4 4m4-4v12" /></svg>
             </button>
             <button className="bg-green-500 hover:bg-green-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center shadow" aria-label="Subir carpeta" onClick={() => { setModalSection(2); setShowMenu(false); }}>

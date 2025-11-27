@@ -57,6 +57,8 @@ export default function MasonryGrid({ shots, setShots, setSelectedShot }: Masonr
             key={shot.id}
             className="mb-2 break-inside-avoid rounded-lg overflow-hidden shadow bg-gray-800 cursor-pointer hover:ring-2 hover:ring-yellow-500 transition relative"
             onClick={() => {
+              // Si necesitas redirección absoluta, usa la variable
+              // window.location.href = process.env.NEXT_PUBLIC_BASE_URL + "/shots/" + shot.id;
               if (typeof setSelectedShot === 'function') {
                 setSelectedShot(shot);
               }
@@ -67,8 +69,10 @@ export default function MasonryGrid({ shots, setShots, setSelectedShot }: Masonr
             }}
           >
             <img src={shot.image_url} alt={shot.title || "Shot"} className="w-full object-cover" />
-            {/* Autor debajo de la imagen */}
-            <div className="px-2 pt-2 text-yellow-400 font-bold text-sm">{shot.author || "sin autor"}</div>
+            {/* Autor debajo de la imagen: solo si existe */}
+            {shot.author && (
+              <div className="px-2 pt-2 text-yellow-400 font-bold text-sm">{shot.author}</div>
+            )}
             {/* Mostrar botón de guardar solo si hay sesión iniciada */}
             {user && (
               <button

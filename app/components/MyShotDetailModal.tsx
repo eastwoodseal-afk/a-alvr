@@ -74,9 +74,10 @@ export default function MyShotDetailModal({ shot, user, onClose, setShots, shots
           }}
         />
         <div className="w-full text-left">
-            <div className="text-lg text-yellow-400 font-bold mb-2">
-              {shot.author || "sin autor"}
-            </div>
+            {/* Autor del shot: solo si existe */}
+            {shot.author && (
+              <div className="text-lg text-yellow-400 font-bold mb-2">{shot.author}</div>
+            )}
             {shot.title && <div className="text-base font-bold text-yellow-400 mb-2">{shot.title}</div>}
             {shot.description && <div className="text-base text-gray-200 mb-2">{shot.description}</div>}
             {/* ...otros datos... */}
