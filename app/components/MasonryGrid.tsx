@@ -9,7 +9,7 @@ interface Shot {
   username?: string;
   user_id?: string;
   author?: string;
-  board_name?: string; // Añadimos board_name a la interfaz
+  boardname?: string; // Añadimos board_name a la interfaz
 }
 
 interface MasonryGridProps {
