@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../../lib/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
-
 import { useRouter } from "next/navigation";
 
 export default function ProfilePage() {
@@ -14,6 +13,7 @@ export default function ProfilePage() {
     setUsername(user?.username || "");
     setEmail(user?.email || "");
   }, [user]);
+  
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -57,20 +57,8 @@ export default function ProfilePage() {
       setPasswordLoading(false);
       return;
     }
-    let finished = false;
-    const timeout = setTimeout(() => {
-      if (!finished) {
-        setPasswordLoading(false);
-        setPasswordSuccess("Contraseña cambiada correctamente.");
-        setNewPassword("");
-        setShowPasswordForm(false);
-      }
-    }, 2000);
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
-      finished = true;
-      clearTimeout(timeout);
-      console.log('Resultado updateUser:', error);
       if (error) {
         setPasswordError(error.message || "No se pudo cambiar la contraseña.");
         setPasswordLoading(false);
@@ -83,11 +71,8 @@ export default function ProfilePage() {
         window.location.href = "/";
       }
     } catch (err: any) {
-      finished = true;
-      clearTimeout(timeout);
       setPasswordError(err?.message || "Error inesperado.");
       setPasswordLoading(false);
-      console.error('Error inesperado:', err);
     }
   }
 
@@ -97,14 +82,12 @@ export default function ProfilePage() {
       setError("Debes escribir 'ELIMINAR' para confirmar.");
       return;
     }
-      if (!user?.id) return;
-      // Marca el usuario como inactivo en la tabla profiles
-      const { error } = await supabase.from('profiles').update({ active: false }).eq('id', user.id);
-      if (!error) {
-        await supabase.auth.signOut();
-        window.location.href = "/";
-      }
-      // Puedes mostrar un mensaje de error si lo deseas
+    if (!user?.id) return;
+    const { error } = await supabase.from('profiles').update({ active: false }).eq('id', user.id);
+    if (!error) {
+      await supabase.auth.signOut();
+      window.location.href = "/";
+    }
   }
 
   const router = useRouter();

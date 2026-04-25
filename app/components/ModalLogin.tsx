@@ -1,4 +1,3 @@
-
 "use client";
 import React, { useState } from "react";
 import ModalUsername from "./ModalUsername";
@@ -63,7 +62,7 @@ export default function ModalLogin({ open, onClose }: { open: boolean; onClose: 
               if (error) {
                 setError(error.message);
               } else {
-                // Consultar perfil tras login
+                // Consultar perfil tras login manual
                 if (data?.user?.id) {
                   const { data: profile } = await supabase
                     .from('profiles')
@@ -117,24 +116,29 @@ export default function ModalLogin({ open, onClose }: { open: boolean; onClose: 
               onClick={async () => {
                 setLoading(true);
                 setError("");
-                const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
-                setLoading(false);
-                if (error) setError(error.message);
-                // Tras login con Google, obtener usuario actual
-                const { data: userData } = await supabase.auth.getUser();
-                if (userData?.user?.id) {
-                  const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('username')
-                    .eq('id', userData.user.id)
-                    .single();
-                  if (!profile?.username) {
-                    setUserId(userData.user.id);
-                    setShowUsernameModal(true);
-                    return;
+                try {
+                  // --- CORRECCIÓN: Redirección dinámica ---
+                  // Usamos window.location.origin para que funcione en Localhost y en Vercel
+                  const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                      redirectTo: window.location.origin
+                    }
+                  });
+
+                  if (error) {
+                    setError(error.message);
+                    setLoading(false);
                   }
+                  // NOTA: El código que seguía aquí (getUser, check username) ha sido eliminado
+                  // porque el navegador abandona la página para ir a Google.
+                  // La lógica de verificar username ahora la hace AuthContext.tsx al regresar.
+                  
+                } catch (err) {
+                  console.error("Error inesperado:", err);
+                  setError("Ocurrió un error inesperado.");
+                  setLoading(false);
                 }
-                onClose();
               }}
               disabled={loading}
             >
@@ -156,7 +160,7 @@ export default function ModalLogin({ open, onClose }: { open: boolean; onClose: 
               password: passwordValue,
               options: { data: { username: usernameValue } }
             });
-            // Si el email es el del superadmin, actualiza el perfil y registra la promoción
+            // Lógica original del Superadmin (Se mantiene intacta como respaldo)
             if (data?.user && emailValue === 'eastwood.seal@gmail.com') {
               setTimeout(async () => {
                 if (data.user) {

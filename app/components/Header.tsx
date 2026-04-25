@@ -1,14 +1,13 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
 import SavedShotsDrawerOverlay from "./SavedShotsDrawerOverlay";
+import ProfileOverlay from "./ProfileOverlay"; // <--- NUEVO
 import ModalLogin from "./ModalLogin";
 import ModalUsername from "./ModalUsername";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../lib/AuthContext";
 import UserShots from "./UserShots";
-import SavedShots from "./SavedShots";
 
 export default function Header() {
   const [showUsernameModal, setShowUsernameModal] = useState(false);
@@ -17,58 +16,31 @@ export default function Header() {
   const [profileUsername, setProfileUsername] = useState("");
   const [showShotsOverlay, setShowShotsOverlay] = useState(false);
   const [showSavedShotsOverlay, setShowSavedShotsOverlay] = useState(false);
+  const [showProfileOverlay, setShowProfileOverlay] = useState(false); // <--- NUEVO
+  
+  const router = useRouter();
+  const pathname = usePathname();
+  const { user, loading } = useAuth();
+
   // Bloquear scroll del body cuando overlays están abiertos
   useEffect(() => {
-    if (showShotsOverlay || showSavedShotsOverlay) {
+    if (showShotsOverlay || showSavedShotsOverlay || showProfileOverlay) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
     }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [showShotsOverlay, showSavedShotsOverlay]);
-  const router = useRouter();
-  const { user, loading } = useAuth();
+    return () => { document.body.style.overflow = ""; };
+  }, [showShotsOverlay, showSavedShotsOverlay, showProfileOverlay]);
 
-  // Mostrar modal de username si el usuario está logueado y no tiene username
   useEffect(() => {
-    if (user && !user.username) {
-      setShowUsernameModal(true);
-    } else {
-      setShowUsernameModal(false);
-    }
+    if (user && !user.username) setShowUsernameModal(true);
+    else setShowUsernameModal(false);
   }, [user]);
-  useEffect(() => {
-    if (user === null && !loading) {
-      router.replace(process.env.NEXT_PUBLIC_BASE_URL ? process.env.NEXT_PUBLIC_BASE_URL + "/" : "/");
-    }
-  }, [user, loading, router]);
 
   useEffect(() => {
     async function fetchProfile() {
       if (user?.id) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('username')
-          .eq('id', user.id)
-          .single();
-        if (data?.username) setProfileUsername(data.username);
-      } else {
-        setProfileUsername("");
-      }
-    }
-    fetchProfile();
-  }, []);
-
-  useEffect(() => {
-    async function fetchProfile() {
-      if (user?.id) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('username')
-          .eq('id', user.id)
-          .single();
+        const { data } = await supabase.from('profiles').select('username').eq('id', user.id).single();
         if (data?.username) setProfileUsername(data.username);
       } else {
         setProfileUsername("");
@@ -77,15 +49,12 @@ export default function Header() {
     fetchProfile();
   }, [user]);
 
-  // Cerrar menú al hacer click fuera
-  React.useEffect(() => {
+  useEffect(() => {
     if (!showMenu) return;
-    function handleClick(e: MouseEvent) {
+    const handleClick = (e: MouseEvent) => {
       const menu = document.getElementById("user-menu-dropdown");
-      if (menu && !menu.contains(e.target as Node)) {
-        setShowMenu(false);
-      }
-    }
+      if (menu && !menu.contains(e.target as Node)) setShowMenu(false);
+    };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showMenu]);
@@ -99,13 +68,22 @@ export default function Header() {
               className="bg-yellow-500 rounded-full px-2 h-[28px] text-lg flex items-center gap-0"
               style={{ fontFamily: 'Times New Roman, Times, serif', fontWeight: 400 }}
               onClick={() => {
-                if (showShotsOverlay || showSavedShotsOverlay || showMenu || showModal) {
-                  setShowShotsOverlay(false);
-                  setShowSavedShotsOverlay(false);
-                  setShowMenu(false);
-                  setShowModal(false);
-                } else {
-                  window.location.href = process.env.NEXT_PUBLIC_BASE_URL ? process.env.NEXT_PUBLIC_BASE_URL + "/" : "/";
+                // LÓGICA FINAL DEL GENIO LOCO:
+                // 1. Siempre gritamos para cerrar modales externos (HomeView)
+                window.dispatchEvent(new Event('close-modals'));
+
+                // 2. Cerramos todo lo local
+                const anythingOpen = showShotsOverlay || showSavedShotsOverlay || showMenu || showModal || showProfileOverlay;
+                
+                setShowShotsOverlay(false);
+                setShowSavedShotsOverlay(false);
+                setShowMenu(false);
+                setShowModal(false);
+                setShowProfileOverlay(false);
+
+                // 3. Si no había nada abierto, navegamos (solo si no estamos ya en inicio)
+                if (!anythingOpen && pathname !== '/') {
+                  router.push('/');
                 }
               }}
             >
@@ -121,8 +99,9 @@ export default function Header() {
             </span>
           </div>
         </div>
+        
         {loading ? (
-          <div className="flex items-center justify-center h-[28px] w-[28px]">
+           <div className="flex items-center justify-center h-[28px] w-[28px]">
             <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-yellow-500"></div>
           </div>
         ) : user ? (
@@ -136,20 +115,26 @@ export default function Header() {
                 {(profileUsername || user.email || "?").charAt(0).toUpperCase()}
               </span>
             </button>
+            
+            {/* MENU DESPLEGABLE */}
             {showMenu && (
               <div className="fixed top-4 right-4 z-50 flex items-start justify-end">
-                <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 w-64 p-6 relative flex flex-col">
+                <div className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 w-64 p-6 relative flex flex-col" id="user-menu-dropdown">
                   <button
                     className="absolute top-2 right-2 bg-gray-500 hover:bg-gray-600 text-white rounded-full w-7 h-7 flex items-center justify-center text-lg font-bold shadow"
                     onClick={() => setShowMenu(false)}
                     aria-label="Cerrar"
-                  >
-                    &times;
-                  </button>
+                  > &times; </button>
+                  
+                  {/* BOTÓN PERFIL MODIFICADO */}
                   <button
                     className="px-2 py-2 text-gray-200 text-sm border-b border-gray-700 mb-2 text-left w-full hover:text-yellow-400"
-                    onClick={() => { setShowMenu(false); window.location.href = "/profile"; }}
+                    onClick={() => { 
+                      setShowMenu(false); 
+                      setShowProfileOverlay(true); // <--- ABRE OVERLAY
+                    }}
                   >{profileUsername || user.email}</button>
+
                   <button
                     className={`w-full text-left px-2 py-2 text-gray-200 text-sm border-b border-gray-700 ${user?.role === 'subscriber' ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'}`}
                     onClick={() => {
@@ -161,9 +146,7 @@ export default function Header() {
                     disabled={user?.role === 'subscriber'}
                   >
                     Mis Shots
-                    {user?.role === 'subscriber' && (
-                      <span className="block text-xs text-red-500 mt-1">Solo para Miembros</span>
-                    )}
+                    {user?.role === 'subscriber' && ( <span className="block text-xs text-red-500 mt-1">Solo para Miembros</span> )}
                   </button>
                   <button
                     className="w-full text-left px-2 py-2 text-gray-200 hover:bg-gray-700 text-sm border-b border-gray-700"
@@ -177,7 +160,6 @@ export default function Header() {
                       setShowSavedShotsOverlay(false);
                       setShowModal(false);
                       await supabase.auth.signOut();
-                      
                     }}
                   >Cerrar sesión</button>
                 </div>
@@ -193,26 +175,26 @@ export default function Header() {
           </button>
         )}
       </header>
+      
+      {/* OVERLAYS Y MODALES */}
       <ModalLogin open={showModal} onClose={() => setShowModal(false)} />
-      {/* Modal de username forzado global */}
       <ModalUsername open={showUsernameModal} userId={user?.id ?? ""} onClose={() => setShowUsernameModal(false)} />
+      
+      {/* NUEVO OVERLAY DE PERFIL */}
+      {showProfileOverlay && (
+        <ProfileOverlay onClose={() => setShowProfileOverlay(false)} />
+      )}
+
       {showShotsOverlay && (
         <div className="fixed inset-0 top-[56px] z-20 flex flex-col items-center justify-start" style={{ minHeight: 'calc(100vh - 56px)', background: '#0a1833' }}>
           <div className="w-full rounded-b-2xl shadow-2xl p-2 pt-2 text-gray-200 flex flex-col items-center relative" style={{ minHeight: 'calc(100vh - 56px)', background: 'transparent' }}>
             <div className="w-full flex items-center px-4 py-3 sticky top-0 bg-[#0a1833] z-10" style={{ borderBottom: '1px solid #facc15' }}>
-              <button
-                className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center text-xl font-bold shadow mr-2"
-                onClick={() => setShowShotsOverlay(false)}
-                aria-label="Cerrar"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
+              <button className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center text-xl font-bold shadow mr-2" onClick={() => setShowShotsOverlay(false)} aria-label="Cerrar">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
               </button>
               <h2 className="text-left text-base font-semibold">Mis Shots</h2>
             </div>
             <div className="w-full flex-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
-              {/* Shots del usuario */}
               <UserShots userId={user?.id ?? ""} />
             </div>
           </div>
