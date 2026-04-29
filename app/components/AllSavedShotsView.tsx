@@ -19,11 +19,12 @@ interface Shot {
   author?: string;
   board_name?: string;
   board_id?: string;
-  views_count?: number; // Traemos esto
+  views_count?: number;
 }
 
+// --- FIX: Permitir null y undefined ---
 interface Props {
-  userId: string;
+  userId: string | null | undefined;
 }
 
 export default function AllSavedShotsView({ userId }: Props) {
@@ -38,7 +39,9 @@ export default function AllSavedShotsView({ userId }: Props) {
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const fetchShots = useCallback(async (pageNum: number) => {
-    if (loading) return;
+    // Si no hay userId, no hacemos nada
+    if (!userId || loading) return; 
+    
     setLoading(true);
     const start = pageNum * BATCH_SIZE;
     const end = start + BATCH_SIZE - 1;
@@ -66,7 +69,11 @@ export default function AllSavedShotsView({ userId }: Props) {
       .order("created_at", { ascending: false })
       .range(start, end);
 
-    if (error) { console.error("Error detallado:", error); setLoading(false); return; }
+    if (error) {
+        console.error("Error detallado:", error);
+        setLoading(false);
+        return;
+    }
 
     const processedShots = (data || []).map((item: any) => {
         const bs = item.shots?.board_shots && item.shots.board_shots.length > 0 
@@ -95,7 +102,12 @@ export default function AllSavedShotsView({ userId }: Props) {
 
   }, [userId, loading]);
 
-  useEffect(() => { setShots([]); setPage(0); setHasMore(true); fetchShots(0); }, [userId]);
+  useEffect(() => { 
+    setShots([]); 
+    setPage(0); 
+    setHasMore(true); 
+    if (userId) fetchShots(0); 
+  }, [userId]);
 
   const loadMore = useCallback(() => {
     if (hasMore && !loading) { const nextPage = page + 1; setPage(nextPage); fetchShots(nextPage); }
@@ -120,16 +132,8 @@ export default function AllSavedShotsView({ userId }: Props) {
       setSavingId(null);
   };
 
-  // FUNCIÓN: Actualiza local Y GRITA al mundo
-  const handleView = useCallback((shotId: string) => {
-    // 1. Local
-    setShots(prev => prev.map(s => {
-      if(s.id === shotId) return { ...s, views_count: (s.views_count || 0) + 1 };
-      return s;
-    }));
-    // 2. Global (para que HomeView se entere)
-    window.dispatchEvent(new CustomEvent('shot-viewed', { detail: shotId }));
-  }, []);
+  // Guardia extra si no hay userId
+  if (!userId) return <div className="text-center py-8 text-gray-400">No hay usuario logueado.</div>;
 
   return (
     <>
@@ -143,8 +147,7 @@ export default function AllSavedShotsView({ userId }: Props) {
                 savingId={savingId}
                 onSaveShot={handleSave}
                 user={user}
-                hideLikes={true} // <--- OCULTAMOS LIKES
-                // hideViews={false} es default, así que se verán
+                hideLikes={true}
             />
         )}
 
@@ -163,7 +166,7 @@ export default function AllSavedShotsView({ userId }: Props) {
                 likesCount={0}
                 onLike={() => {}}
                 viewsCount={selectedShot.views_count || 0}
-                onView={handleView} // PASAMOS FUNCIÓN
+                onView={() => {}} // Aquí podrías pasar una función si quieres actualizar conteo
             />
         )}
     </>
