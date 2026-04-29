@@ -10,6 +10,7 @@ export interface UserWithRole {
   created_at: string;
   promoted_by?: string;
   promoted_at?: string;
+  avatar_url?: string; // <--- NUEVO: Para soportar foto de perfil
 }
 
 export interface RolePromotion {

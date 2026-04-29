@@ -1,16 +1,7 @@
 import React from "react";
 import ShotCard from "./ShotCard";
 
-interface Shot {
-  id: string;
-  image_url: string;
-  title?: string;
-  description?: string;
-  username?: string;
-  user_id?: string;
-  author?: string;
-  boardname?: string; // Añadimos board_name a la interfaz
-}
+interface Shot { id: string; image_url: string; title?: string; description?: string; username?: string; user_id?: string; author?: string; likes_count?: number; views_count?: number; board_name?: string; }
 
 interface MasonryGridProps {
   shots: Shot[];
@@ -19,9 +10,26 @@ interface MasonryGridProps {
   savingId: string | null;
   onSaveShot: (id: string) => void;
   user: any;
+  likedShots?: string[]; 
+  likingId?: string | null; 
+  onLike?: (id: string) => void; 
+  hideLikes?: boolean;
+  hideViews?: boolean; // NUEVA PROP
 }
 
-export default function MasonryGrid({ shots, setSelectedShot, savedShots, savingId, onSaveShot, user }: MasonryGridProps) {
+export default function MasonryGrid({ 
+  shots, 
+  setSelectedShot, 
+  savedShots, 
+  savingId, 
+  onSaveShot, 
+  user, 
+  likedShots = [], 
+  likingId = null, 
+  onLike = () => {},
+  hideLikes = false,
+  hideViews = false // Default: mostrar vistas
+}: MasonryGridProps) {
   return (
     <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-6 gap-2 w-full xl:w-screen xl:max-w-none pt-20">
       {shots.map((shot) => (
@@ -32,13 +40,15 @@ export default function MasonryGrid({ shots, setSelectedShot, savedShots, saving
           isSaved={savedShots.includes(shot.id)}
           isSaving={savingId === shot.id}
           onSave={() => onSaveShot(shot.id)}
-          onClick={() => {
-            if (typeof setSelectedShot === 'function') {
-              setSelectedShot(shot);
-            }
-          }}
-          // Pasamos el nombre del tablero a la tarjeta
+          onClick={() => { if (typeof setSelectedShot === 'function') setSelectedShot(shot); }}
+          
+          isLiked={likedShots.includes(shot.id)}
+          likesCount={shot.likes_count || 0}
+          isLiking={likingId === shot.id}
+          onLike={() => onLike(shot.id)}
           boardName={shot.board_name}
+          hideLikes={hideLikes}
+          hideViews={hideViews} // PASAMOS LA PROP
         />
       ))}
     </div>

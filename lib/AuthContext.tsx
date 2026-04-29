@@ -2,98 +2,84 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { UserWithRole } from "./roleUtils";
+import { User } from "@supabase/supabase-js";
 
-const AuthContext = createContext<{ user: UserWithRole | null, loading: boolean }>({ user: null, loading: true });
+// Añadimos followingOnly al tipo del contexto
+const AuthContext = createContext<{ 
+  user: UserWithRole | null, 
+  loading: boolean,
+  followingOnly: boolean, // NUEVO
+  toggleFollowingFilter: () => void // NUEVO
+}>({ 
+  user: null, 
+  loading: true,
+  followingOnly: false,
+  toggleFollowingFilter: () => {} 
+});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserWithRole | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // --- NUEVO: ESTADO DEL FILTRO ---
+  const [followingOnly, setFollowingOnly] = useState(false);
+
+  const toggleFollowingFilter = () => {
+    setFollowingOnly(prev => !prev);
+  };
+  // -------------------------------
 
   useEffect(() => {
-    // Función auxiliar para obtener perfil y asignar rol admin si corresponde
-    const fetchProfileAndSetAdmin = async (userId: string, userEmail: string | undefined) => {
-      // 1. Obtener perfil actual
+    const fetchProfileAndSetAdmin = async (supabaseUser: User) => {
+      const userId = supabaseUser.id;
+      const userEmail = supabaseUser.email;
+
       const { data: profile } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
 
+      const googleAvatar = supabaseUser.user_metadata?.avatar_url;
+      let avatarUrl = profile?.avatar_url || googleAvatar || null;
+
+      if (profile && !profile.avatar_url && googleAvatar) {
+         await supabase.from('profiles').update({ avatar_url: googleAvatar }).eq('id', userId);
+         avatarUrl = googleAvatar; 
+      }
+
       if (profile) {
-        // 2. LÓGICA DEL SUPERADMIN (Añadida aquí)
-        // Si el email es el del admin y el rol no es superadmin (o queremos asegurar que lo tenga)
         if (userEmail === 'eastwood.seal@gmail.com') {
-          // Actualizamos el perfil silenciosamente si es necesario
-          // Nota: Esto se ejecutará en cada carga de sesión, lo que asegura que nunca pierdas el rol
-          await supabase
-            .from('profiles')
-            .update({ 
-              role: 'superadmin',
-              promoted_by: userId,
-              promoted_at: new Date().toISOString()
-            })
-            .eq('id', userId);
-            
-            // También registramos en el historial (upsert para evitar duplicados)
-            await supabase
-              .from('role_promotions')
-              .upsert({
-                user_id: userId,
-                promoted_by: userId,
-                old_role: profile.role || 'subscriber',
-                new_role: 'superadmin',
-                notes: 'Auto-verified by AuthContext',
-                created_at: new Date().toISOString(),
-              }, { onConflict: 'user_id' });
-          
-          // Actualizamos el objeto profile local para reflejar el cambio inmediato
+          await supabase.from('profiles').update({ role: 'superadmin', promoted_by: userId, promoted_at: new Date().toISOString() }).eq('id', userId);
+          try {
+            await supabase.from('role_promotions').insert({ user_id: userId, promoted_by: userId, old_role: profile.role || 'subscriber', new_role: 'superadmin', notes: 'Auto-verified by AuthContext', created_at: new Date().toISOString() });
+          } catch (err) { console.warn("Log de promoción omitido."); }
           profile.role = 'superadmin';
         }
 
-        setUser({
-          id: profile.id,
-          email: userEmail ?? "",
-          username: profile.username,
-          role: profile.role,
-          created_at: profile.created_at,
-          promoted_by: profile.promoted_by,
-          promoted_at: profile.promoted_at,
-        });
+        setUser({ id: profile.id, email: userEmail ?? "", username: profile.username, role: profile.role, created_at: profile.created_at, promoted_by: profile.promoted_by, promoted_at: profile.promoted_at, avatar_url: avatarUrl });
       }
     };
 
-    // 1. Obtener la sesión actual al cargar
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await fetchProfileAndSetAdmin(session.user.id, session.user.email);
-      } else {
-        setUser(null);
-      }
+      if (session?.user) { await fetchProfileAndSetAdmin(session.user); } 
+      else { setUser(null); }
       setLoading(false);
     };
     getSession();
 
-    // 2. Escuchar los cambios en el estado de autenticación
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log(`[AuthProvider] Evento de autenticación: ${event}`);
-        
-        if (session?.user) {
-          await fetchProfileAndSetAdmin(session.user.id, session.user.email);
-        } else {
-          setUser(null);
-        }
-        setLoading(false);
-      }
-    );
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) { await fetchProfileAndSetAdmin(session.user); } 
+      else { setUser(null); }
+      setLoading(false);
+    });
 
-    // 3. Limpiar la suscripción cuando el componente se desmonta
     return () => subscription.unsubscribe();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading }}>
+    <AuthContext.Provider value={{ user, loading, followingOnly, toggleFollowingFilter }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,20 +1,37 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import AllSavedShotsView from "./AllSavedShotsView";
 const SavedShots = React.lazy(() => import("./SavedShots"));
+import { supabase } from "../../lib/supabaseClient";
 
 interface Props {
   userId: string | null | undefined;
   onClose: () => void;
+  initialView?: 'all' | null;
 }
 
-export default function SavedShotsDrawerOverlay({ userId, onClose }: Props) {
+export default function SavedShotsDrawerOverlay({ userId, onClose, initialView = null }: Props) {
     const [filterBoardId, setFilterBoardId] = useState<string>("");
     const [depositing, setDepositing] = useState(false);
     const [depositError, setDepositError] = useState("");
     const [depositSuccess, setDepositSuccess] = useState(false);
     
-    // Estado para cambiar entre vista Organizador y Ver Todo
-    const [viewMode, setViewMode] = useState<string | null>(null);
+    const [viewMode, setViewMode] = useState<string | null>(initialView);
+
+    // --- FETCH DATOS PERFIL PARA HEADER ---
+    const [profileData, setProfileData] = useState<{username:string, avatar_url:string, followers_count:number, following_count:number} | null>(null);
+
+    useEffect(() => {
+        if (userId) {
+            supabase.from('profiles')
+                .select('username, avatar_url, followers_count, following_count')
+                .eq('id', userId)
+                .single()
+                .then(({ data }) => {
+                    if(data) setProfileData(data);
+                });
+        }
+    }, [userId]);
+    // ---------------------------------------
 
     function getSelectedShots() {
       const el = document.getElementById("shots-selected-data");
@@ -34,7 +51,7 @@ export default function SavedShotsDrawerOverlay({ userId, onClose }: Props) {
       if (!userId) return;
       setLoadingBoards(true);
       try {
-        const { data, error } = await (await import("../../lib/supabaseClient")).supabase
+        const { data, error } = await supabase
           .from("boards")
           .select("id, name")
           .eq("user_id", userId)
@@ -52,7 +69,7 @@ export default function SavedShotsDrawerOverlay({ userId, onClose }: Props) {
     setCreating(true);
     setError("");
     try {
-      const { data, error } = await (await import("../../lib/supabaseClient")).supabase
+      const { data, error } = await supabase
         .from("boards")
         .insert([{ name: boardName.trim(), user_id: userId }])
         .select();
@@ -76,7 +93,6 @@ export default function SavedShotsDrawerOverlay({ userId, onClose }: Props) {
         <div className="flex-1 overflow-y-auto px-4 py-2">
           <div className="mb-4 flex flex-col gap-2">
             
-            {/* BOTÓN VER TODO */}
             <button
                 className={`w-24 py-1 px-1 rounded font-semibold text-center shadow transition text-sm ${viewMode === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-600 text-white hover:bg-gray-500'}`}
                 onClick={() => { setViewMode('all'); setFilterBoardId(""); setDrawerOpen(false); }}
@@ -100,7 +116,7 @@ export default function SavedShotsDrawerOverlay({ userId, onClose }: Props) {
                       try {
                         if (!board.id) return;
                         const inserts = shotIds.map((shot_id: string) => ({ board_id: board.id, shot_id }));
-                        const { error } = await (await import("../../lib/supabaseClient")).supabase.from("board_shots").insert(inserts);
+                        const { error } = await supabase.from("board_shots").insert(inserts);
                         if (error) { setDepositError("Error."); } 
                         else {
                           setDepositSuccess(true);
@@ -128,19 +144,60 @@ export default function SavedShotsDrawerOverlay({ userId, onClose }: Props) {
 
       {/* Contenido principal */}
       <div className="flex-1 w-full xl:w-screen xl:max-w-none rounded-b-2xl shadow-2xl p-2 pt-2 text-gray-200 flex flex-col items-center relative" style={{ minHeight: 'calc(100vh - 56px)', background: 'rgba(20,20,20,0.95)' }}>
+        
+        {/* --- HEADER DINÁMICO --- */}
         <div className="w-full flex items-center justify-between px-4 py-3 sticky top-0 bg-[rgba(20,20,20,0.95)] z-10" style={{ borderBottom: '1px solid #facc15' }}>
-          <button className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center text-xl font-bold shadow mr-2" onClick={onClose}>
-            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M14 6L8 11L14 16" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          </button>
-          <h2 className="text-base font-semibold flex-1 text-left">
-            {viewMode === 'all' ? 'Todos mis Shots' : (filterBoardId ? boards.find(b => b.id === filterBoardId)?.name || 'Tablero' : 'Shots guardados')}
-          </h2>
+          
+          <div className="flex items-center gap-3">
+            {viewMode === 'all' ? (
+                // --- VISTA "COLECCIÓN" ---
+                <>
+                    {/* 1. Título */}
+                    <span className="text-xl font-bold text-yellow-400">Colección</span>
+                    
+                    {/* 2. Bloque Usuario (Nombre + Seguidores) */}
+                    <div className="flex flex-col justify-center border-l border-gray-600 pl-3">
+                        <span className="text-base text-white font-bold leading-tight">{profileData?.username || "Usuario"}</span>
+                        <span className="text-xs text-gray-400">{profileData?.followers_count ?? 0} seguidores</span>
+                    </div>
+
+                    {/* 3. Avatar */}
+                    <div className="w-9 h-9 rounded-full bg-gray-700 overflow-hidden flex items-center justify-center text-sm font-bold text-white border border-gray-600">
+                       {profileData?.avatar_url ? <img src={profileData.avatar_url} className="w-full h-full object-cover" alt="Avatar" /> : (profileData?.username || "?").charAt(0).toUpperCase()}
+                    </div>
+
+                    {/* 4. Bloque "Siguiendo a" */}
+                    <div className="border-l border-gray-600 pl-3 flex items-center gap-1.5">
+                        <span className="text-xs text-gray-400">Siguiendo a</span>
+                        <span className="text-sm text-white font-bold">{profileData?.following_count ?? 0}</span>
+                    </div>
+                </>
+            ) : (
+                // --- VISTA NORMAL (SHOTS GUARDADOS) ---
+                <>
+                    <button 
+                        className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center text-xl font-bold shadow mr-2" 
+                        onClick={() => {
+                            if (filterBoardId) { setFilterBoardId(""); } 
+                            else { onClose(); }
+                        }}
+                    >
+                        <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M14 6L8 11L14 16" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </button>
+                    <h2 className="text-base font-semibold flex-1 text-left">
+                        {filterBoardId ? boards.find(b => b.id === filterBoardId)?.name || 'Tablero' : 'Shots guardados'}
+                    </h2>
+                </>
+            )}
+          </div>
+
           <button className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center text-xl font-bold shadow ml-2" onClick={() => setDrawerOpen(v => !v)}> &#9776; </button>
         </div>
+        
+        {/* CONTENIDO */}
         <div className="w-full flex-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
           
           {viewMode === 'all' ? (
-             // AQUI ESTÁ LA LÍNEA QUE BUSCABAS:
              <AllSavedShotsView userId={userId} />
           ) : (
              <React.Suspense fallback={<div className="text-gray-400 py-8">Cargando...</div>}>

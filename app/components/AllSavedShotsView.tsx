@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabaseClient";
 import MasonryGrid from "./MasonryGrid";
 import ShotDetailModal from "./ShotDetailModal";
 import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
+import { useAuth } from "../../lib/AuthContext";
 
 const BATCH_SIZE = 20;
 
@@ -18,6 +19,7 @@ interface Shot {
   author?: string;
   board_name?: string;
   board_id?: string;
+  views_count?: number; // Traemos esto
 }
 
 interface Props {
@@ -25,6 +27,7 @@ interface Props {
 }
 
 export default function AllSavedShotsView({ userId }: Props) {
+  const { user } = useAuth();
   const [shots, setShots] = useState<Shot[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -37,11 +40,9 @@ export default function AllSavedShotsView({ userId }: Props) {
   const fetchShots = useCallback(async (pageNum: number) => {
     if (loading) return;
     setLoading(true);
-
     const start = pageNum * BATCH_SIZE;
     const end = start + BATCH_SIZE - 1;
 
-    // Consulta: Trae shots guardados con su info de tablero
     const { data, error } = await supabase
       .from("saved_shots")
       .select(`
@@ -54,6 +55,7 @@ export default function AllSavedShotsView({ userId }: Props) {
           description, 
           author, 
           user_id,
+          views_count,
           board_shots (
             board_id,
             boards ( name )
@@ -64,13 +66,8 @@ export default function AllSavedShotsView({ userId }: Props) {
       .order("created_at", { ascending: false })
       .range(start, end);
 
-    if (error) {
-        console.error("Error detallado:", error);
-        setLoading(false);
-        return;
-    }
+    if (error) { console.error("Error detallado:", error); setLoading(false); return; }
 
-    // Procesar datos
     const processedShots = (data || []).map((item: any) => {
         const bs = item.shots?.board_shots && item.shots.board_shots.length > 0 
           ? item.shots.board_shots[0] 
@@ -85,7 +82,8 @@ export default function AllSavedShotsView({ userId }: Props) {
             user_id: item.shots?.user_id,
             username: "Usuario", 
             board_name: bs?.boards?.name,
-            board_id: bs?.board_id
+            board_id: bs?.board_id,
+            views_count: item.shots?.views_count || 0
         };
     }).filter(s => s.id); 
 
@@ -97,40 +95,41 @@ export default function AllSavedShotsView({ userId }: Props) {
 
   }, [userId, loading]);
 
-  useEffect(() => {
-    setShots([]);
-    setPage(0);
-    setHasMore(true);
-    fetchShots(0);
-  }, [userId]);
+  useEffect(() => { setShots([]); setPage(0); setHasMore(true); fetchShots(0); }, [userId]);
 
   const loadMore = useCallback(() => {
-    if (hasMore && !loading) {
-      const nextPage = page + 1;
-      setPage(nextPage);
-      fetchShots(nextPage);
-    }
+    if (hasMore && !loading) { const nextPage = page + 1; setPage(nextPage); fetchShots(nextPage); }
   }, [page, hasMore, loading, fetchShots]);
   
   useInfiniteScroll(loadMore, loading);
 
-  // Lógica de guardado (necesaria aunque el botón esté oculto, por consistencia)
   useEffect(() => {
     async function fetchSaved() {
-      if (!userId) return;
-      const { data } = await supabase.from("saved_shots").select("shot_id").eq("user_id", userId);
+      if (!user) return;
+      const { data } = await supabase.from("saved_shots").select("shot_id").eq("user_id", user.id);
       if (data) setSavedShots(data.map((r: any) => r.shot_id));
     }
     fetchSaved();
-  }, [userId]);
+  }, [user]);
 
   const handleSave = async (id: string) => {
-      if(!userId) return;
+      if(!user) return;
       setSavingId(id);
-      await supabase.from("saved_shots").insert({ user_id: userId, shot_id: id });
+      await supabase.from("saved_shots").insert({ user_id: user.id, shot_id: id });
       setSavedShots(p => [...p, id]);
       setSavingId(null);
   };
+
+  // FUNCIÓN: Actualiza local Y GRITA al mundo
+  const handleView = useCallback((shotId: string) => {
+    // 1. Local
+    setShots(prev => prev.map(s => {
+      if(s.id === shotId) return { ...s, views_count: (s.views_count || 0) + 1 };
+      return s;
+    }));
+    // 2. Global (para que HomeView se entere)
+    window.dispatchEvent(new CustomEvent('shot-viewed', { detail: shotId }));
+  }, []);
 
   return (
     <>
@@ -143,10 +142,9 @@ export default function AllSavedShotsView({ userId }: Props) {
                 savedShots={savedShots}
                 savingId={savingId}
                 onSaveShot={handleSave}
-                // --- CLAVE: Pasamos null para ocultar el botón de guardar ---
-                user={null} 
-                // Pasamos el nombre del tablero (visual)
-                boardName={shots.find(s => s.board_name)?.board_name} // Nota: Esto lo pasa el grid internamente por shot
+                user={user}
+                hideLikes={true} // <--- OCULTAMOS LIKES
+                // hideViews={false} es default, así que se verán
             />
         )}
 
@@ -160,7 +158,12 @@ export default function AllSavedShotsView({ userId }: Props) {
                 isSaved={savedShots.includes(selectedShot.id)}
                 isSaving={savingId === selectedShot.id}
                 onSave={() => handleSave(selectedShot.id)}
-                user={{ id: userId }}
+                user={user}
+                isLiked={false} 
+                likesCount={0}
+                onLike={() => {}}
+                viewsCount={selectedShot.views_count || 0}
+                onView={handleView} // PASAMOS FUNCIÓN
             />
         )}
     </>

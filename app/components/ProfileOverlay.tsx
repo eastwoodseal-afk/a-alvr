@@ -11,11 +11,10 @@ export default function ProfileOverlay({ onClose }: Props) {
   const { user } = useAuth();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
-
-  useEffect(() => {
-    setUsername(user?.username || "");
-    setEmail(user?.email || "");
-  }, [user]);
+  
+  // NUEVO: Estado para contadores
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -27,6 +26,26 @@ export default function ProfileOverlay({ onClose }: Props) {
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
   const [passwordLoading, setPasswordLoading] = useState(false);
+
+  useEffect(() => {
+    setUsername(user?.username || "");
+    setEmail(user?.email || "");
+    
+    // NUEVO: Cargar contadores reales
+    if (user?.id) {
+        supabase
+            .from('profiles')
+            .select('followers_count, following_count')
+            .eq('id', user.id)
+            .single()
+            .then(({ data }) => {
+                if (data) {
+                    setFollowersCount(data.followers_count || 0);
+                    setFollowingCount(data.following_count || 0);
+                }
+            });
+    }
+  }, [user]);
 
   useEffect(() => {
     const handleClose = () => onClose();
@@ -71,12 +90,25 @@ export default function ProfileOverlay({ onClose }: Props) {
   }
 
   return (
-    // NIVEL 60: Por encima de todo (Shots guardados es 40, su sidebar es 50)
     <div className="fixed inset-0 z-[60] flex justify-center items-start pt-16 bg-black bg-opacity-50" onClick={onClose}>
       <div className="max-w-lg w-full mx-auto mt-0 p-6 bg-gray-900 rounded-2xl shadow-xl text-gray-100 relative" onClick={e => e.stopPropagation()}>
         <button className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl font-bold" onClick={onClose}>×</button>
-        <h2 className="text-2xl font-bold mb-4 text-yellow-400">Configuración de Perfil</h2>
+        <h2 className="text-2xl font-bold mb-4 text-yellow-400">Mi Perfil</h2>
         
+        {/* --- NUEVA SECCIÓN: ESTADÍSTICAS --- */}
+        <div className="flex justify-around mb-6 p-4 bg-gray-800 rounded-xl border border-gray-700">
+            <div className="text-center">
+                <div className="text-2xl font-bold text-white">{followersCount}</div>
+                <div className="text-xs text-gray-400 uppercase tracking-wide">Seguidores</div>
+            </div>
+            <div className="h-10 w-px bg-gray-600"></div>
+            <div className="text-center">
+                <div className="text-2xl font-bold text-white">{followingCount}</div>
+                <div className="text-xs text-gray-400 uppercase tracking-wide">Siguiendo</div>
+            </div>
+        </div>
+        {/* ------------------------------------ */}
+
         <div className="mb-4">
           <label className="block text-sm mb-1">Usuario</label>
           <input type="text" className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-gray-100" value={username} onChange={e => setUsername(e.target.value)} disabled={saving} />
@@ -85,7 +117,7 @@ export default function ProfileOverlay({ onClose }: Props) {
           <label className="block text-sm mb-1">Email</label>
           <input type="email" className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-gray-100" value={email} disabled />
         </div>
-        <button className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded mb-4" onClick={handleSave} disabled={saving}>Guardar cambios</button>
+        <button className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded mb-4 w-full" onClick={handleSave} disabled={saving}>{saving ? "Guardando..." : "Guardar cambios"}</button>
         
         {success && <div className="text-green-400 mb-2">{success}</div>}
         {error && <div className="text-red-400 mb-2">{error}</div>}
@@ -94,7 +126,7 @@ export default function ProfileOverlay({ onClose }: Props) {
         <h3 className="text-lg font-semibold mb-2">Seguridad</h3>
         {!showPasswordForm ? (
           <>
-            <button className="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded mb-4" onClick={() => { setShowPasswordForm(true); setPasswordSuccess(""); setPasswordError(""); }}>Cambiar contraseña</button>
+            <button className="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded mb-4 w-full text-sm" onClick={() => { setShowPasswordForm(true); setPasswordSuccess(""); setPasswordError(""); }}>Cambiar contraseña</button>
             {passwordSuccess && <div className="text-green-400 mb-2">{passwordSuccess}</div>}
           </>
         ) : (
@@ -102,8 +134,8 @@ export default function ProfileOverlay({ onClose }: Props) {
             <label className="block text-sm mb-1">Nueva contraseña</label>
             <input type="password" className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-gray-100 mb-2" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={6} disabled={passwordLoading} />
             <div className="flex gap-2">
-              <button type="submit" className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded" disabled={passwordLoading}>{passwordLoading ? "Guardando..." : "Guardar"}</button>
-              <button type="button" className="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded" onClick={() => setShowPasswordForm(false)} disabled={passwordLoading}>Cancelar</button>
+              <button type="submit" className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded flex-1" disabled={passwordLoading}>{passwordLoading ? "Guardando..." : "Guardar"}</button>
+              <button type="button" className="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded flex-1" onClick={() => setShowPasswordForm(false)} disabled={passwordLoading}>Cancelar</button>
             </div>
             {passwordError && <div className="text-red-400 mt-2">{passwordError}</div>}
           </form>
@@ -112,12 +144,12 @@ export default function ProfileOverlay({ onClose }: Props) {
         <hr className="my-6 border-gray-700" />
         <h3 className="text-lg font-semibold mb-2 text-red-400">Eliminar cuenta</h3>
         {!showDelete ? (
-          <button className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" onClick={() => setShowDelete(true)}>Quiero eliminar mi cuenta</button>
+          <button className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded w-full text-sm" onClick={() => setShowDelete(true)}>Quiero eliminar mi cuenta</button>
         ) : (
           <div className="mb-4">
             <label className="block text-sm mb-1">Escribe <span className="font-bold">ELIMINAR</span> para confirmar:</label>
             <input type="text" className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-gray-100 mb-2" value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} />
-            <button className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" onClick={handleDeleteAccount}>Eliminar cuenta</button>
+            <button className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded w-full text-sm" onClick={handleDeleteAccount}>Eliminar cuenta</button>
           </div>
         )}
       </div>
