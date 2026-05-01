@@ -15,10 +15,17 @@ interface ShotCardProps {
   onLike: () => void;
   boardName?: string;
   hideLikes?: boolean;
-  hideViews?: boolean; // NUEVA PROP
+  hideViews?: boolean;
+  // NUEVAS PROPS
+  isAdmin?: boolean;
+  onDisapprove?: (id: string) => void;
+  isDisapproving?: boolean;
 }
 
-export default function ShotCard({ shot, user, isSaved, isSaving, onSave, onClick, isLiked, likesCount, isLiking, onLike, boardName, hideLikes, hideViews }: ShotCardProps) {
+export default function ShotCard({ 
+  shot, user, isSaved, isSaving, onSave, onClick, isLiked, likesCount, isLiking, onLike, boardName, hideLikes, hideViews,
+  isAdmin, onDisapprove, isDisapproving 
+}: ShotCardProps) {
   return (
     <div 
       className="mb-2 break-inside-avoid rounded-lg overflow-hidden shadow bg-gray-800 cursor-pointer hover:ring-2 hover:ring-yellow-500 transition relative" 
@@ -44,7 +51,6 @@ export default function ShotCard({ shot, user, isSaved, isSaving, onSave, onClic
         {/* LADO DERECHO: CONTADORES */}
         <div className="flex items-center gap-2 flex-shrink-0">
             
-            {/* --- VISTAS (OJO) - SOLO SI NO ESTÁ OCULTO --- */}
             {!hideViews && (
               <div className="flex flex-col items-center justify-center">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-gray-500">
@@ -55,7 +61,6 @@ export default function ShotCard({ shot, user, isSaved, isSaving, onSave, onClic
               </div>
             )}
 
-            {/* LIKE (CORAZÓN) - SOLO SI NO ESTÁ OCULTO */}
             {!hideLikes && (
               <div className="flex flex-col items-center justify-center">
                 <button 
@@ -73,6 +78,7 @@ export default function ShotCard({ shot, user, isSaved, isSaving, onSave, onClic
         </div>
       </div>
 
+      {/* --- BOTÓN GUARDAR (DERECHA) --- */}
       {user && (
         <button
           className="absolute top-2 right-2 rounded-full w-[28px] h-[28px] flex items-center justify-center shadow-lg z-10"
@@ -85,6 +91,28 @@ export default function ShotCard({ shot, user, isSaved, isSaving, onSave, onClic
           ) : (
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.841-1.672A2.31 2.31 0 0013.86 4H10.14a2.31 2.31 0 00-2.087 1.278l-.84 1.672zM12 16.5a3 3 0 100-6 3 3 0 000 6z" /></svg>
           )}
+        </button>
+      )}
+
+      {/* --- NUEVO: BOTÓN DESAPROBAR (IZQUIERDA) --- */}
+      {isAdmin && onDisapprove && (
+        <button
+          className="absolute top-2 left-2 rounded-full w-[28px] h-[28px] flex items-center justify-center shadow-lg z-10 bg-red-500/60 backdrop-blur-sm hover:bg-red-600 transition group"
+          disabled={isDisapproving}
+          onClick={e => { e.stopPropagation(); onDisapprove(shot.id); }}
+          title="Desaprobar shot (Ocultar)"
+        >
+            {isDisapproving ? (
+                 <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            ) : (
+                // Icono de Alerta / Cuidado
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-yellow-400 group-hover:text-white">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+            )}
         </button>
       )}
     </div>

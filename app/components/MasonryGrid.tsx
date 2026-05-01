@@ -14,7 +14,11 @@ interface MasonryGridProps {
   likingId?: string | null; 
   onLike?: (id: string) => void; 
   hideLikes?: boolean;
-  hideViews?: boolean; // NUEVA PROP
+  hideViews?: boolean;
+  isAdmin?: boolean;
+  onDisapprove?: (id: string) => void;
+  disapprovingId?: string | null;
+  columnsClass?: string; // NUEVA PROP
 }
 
 export default function MasonryGrid({ 
@@ -28,10 +32,14 @@ export default function MasonryGrid({
   likingId = null, 
   onLike = () => {},
   hideLikes = false,
-  hideViews = false // Default: mostrar vistas
+  hideViews = false,
+  isAdmin,
+  onDisapprove,
+  disapprovingId,
+  columnsClass = "columns-2 md:columns-3 lg:columns-4 xl:columns-6" // Default si no se pasa
 }: MasonryGridProps) {
   return (
-    <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-6 gap-2 w-full xl:w-screen xl:max-w-none pt-20">
+    <div className={`${columnsClass} gap-2 w-full xl:w-screen xl:max-w-none pt-20`}>
       {shots.map((shot) => (
         <ShotCard
           key={shot.id}
@@ -48,7 +56,11 @@ export default function MasonryGrid({
           onLike={() => onLike(shot.id)}
           boardName={shot.board_name}
           hideLikes={hideLikes}
-          hideViews={hideViews} // PASAMOS LA PROP
+          hideViews={hideViews}
+          
+          isAdmin={isAdmin}
+          onDisapprove={onDisapprove}
+          isDisapproving={disapprovingId === shot.id}
         />
       ))}
     </div>

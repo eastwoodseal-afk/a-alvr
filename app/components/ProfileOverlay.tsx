@@ -58,7 +58,11 @@ export default function ProfileOverlay({ onClose }: Props) {
     setError("");
     setSuccess("");
     if (!user) { setSaving(false); setError("No hay usuario."); return; }
-    const { error } = await supabase.from("profiles").update({ username }).eq("id", user.id);
+    
+    // FIX: Forzar minúsculas antes de guardar
+    const cleanUsername = username.toLowerCase();
+    
+    const { error } = await supabase.from("profiles").update({ username: cleanUsername }).eq("id", user.id);
     setSaving(false);
     if (error) setError("No se pudo guardar.");
     else setSuccess("Guardado correctamente.");

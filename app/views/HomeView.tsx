@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import MasonryGrid from "../components/MasonryGrid";
 import ShotDetailModal from "../components/ShotDetailModal";
+import UserProfileOverlay from "../components/UserProfileOverlay";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../lib/AuthContext";
 import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
@@ -20,8 +21,14 @@ interface Shot {
   views_count?: number;
 }
 
+interface FollowUser {
+  id: string;
+  username: string;
+  avatar_url?: string;
+}
+
 export default function HomeView() {
-  const { user, followingOnly } = useAuth(); // Obtenemos el estado del filtro
+  const { user, followingOnly } = useAuth();
   const [shots, setShots] = useState<Shot[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -30,9 +37,20 @@ export default function HomeView() {
   
   const [savedShots, setSavedShots] = useState<string[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
-  
   const [likedShots, setLikedShots] = useState<string[]>([]);
   const [likingId, setLikingId] = useState<string | null>(null);
+
+  const [followingUsers, setFollowingUsers] = useState<FollowUser[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [disapprovingId, setDisapprovingId] = useState<string | null>(null);
+
+  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+
+  // Lógica para decidir clases del Grid
+  // Si el filtro está activo, en móvil será 1 columna, en escritorio normal.
+  const gridColumnsClass = followingOnly 
+    ? "columns-1 md:columns-3 lg:columns-4 xl:columns-6" 
+    : "columns-2 md:columns-3 lg:columns-4 xl:columns-6";
 
   const fetchShots = useCallback(async (pageNum: number, isRefresh = false) => {
     if (loading) return;
@@ -40,17 +58,12 @@ export default function HomeView() {
     const start = pageNum * BATCH_SIZE;
     const end = start + BATCH_SIZE - 1;
 
-    // --- LÓGICA DE FETCH ROBUSTA ---
-    
-    // 1. Query base
     let query = supabase
       .from("shots")
       .select("id, image_url, title, description, user_id, author, likes_count, views_count")
       .eq("is_approved", true);
 
-    // 2. Filtro "Mi Gente"
     if (followingOnly && user) {
-        // Traer a quién sigo
         const { data: followingData } = await supabase
             .from('follows')
             .select('following_id')
@@ -58,40 +71,25 @@ export default function HomeView() {
         
         const followingIds = followingData?.map(f => f.following_id) || [];
         
-        // Si no sigo a nadie, muro vacío
         if (followingIds.length === 0) {
-            setShots([]);
-            setHasMore(false);
-            setLoading(false);
-            return;
+            setShots([]); setHasMore(false); setLoading(false); return;
         }
-        
-        // Aplicar filtro IN
         query = query.in('user_id', followingIds);
     }
 
-    // 3. Ordenamiento (común para ambos modos)
-    query = query.order('created_at', { ascending: false });
-
-    // 4. Rango (Paginación)
-    query = query.range(start, end);
-    
-    // 5. Ejecución
+    query = query.order('created_at', { ascending: false }).range(start, end);
     const { data, error } = await query;
 
     if (error) { console.error("Error fetching:", error); setLoading(false); return; }
 
     if (data) {
       let newShots = data as any[];
-      // Convertir ID a String (Regla de Oro)
       newShots = newShots.map(s => ({...s, id: s.id.toString()}));
 
-      // Aleatorio SOLO para usuarios no logueados y sin filtro activo
       if (!user && !followingOnly && newShots.length > 0) {
          newShots = newShots.sort(() => Math.random() - 0.5);
       }
 
-      // Mapeo de Usuarios
       const userIds = [...new Set(newShots.map((shot) => shot.user_id).filter(Boolean))];
       let profilesMap: Record<string, string> = {};
       if (userIds.length) {
@@ -111,21 +109,36 @@ export default function HomeView() {
       if (data.length < BATCH_SIZE) setHasMore(false);
     } else setHasMore(false);
     setLoading(false);
-  }, [user, loading, followingOnly]); // Dependencias correctas
+  }, [user, loading, followingOnly]);
 
-  // Efecto para recargar al cambiar usuario o filtro
   useEffect(() => {
-    setShots([]); 
-    setPage(0); 
-    setHasMore(true);
+    if (followingOnly && user) {
+        const fetchFollowing = async () => {
+            const { data } = await supabase
+                .from('follows')
+                .select('profiles!follows_following_id_fkey(id, username, avatar_url)')
+                .eq('follower_id', user.id);
+            
+            if (data) {
+                const users = data.map((f: any) => f.profiles).filter(Boolean);
+                setFollowingUsers(users);
+            }
+        };
+        fetchFollowing();
+    } else {
+        setFollowingUsers([]);
+    }
+  }, [followingOnly, user]);
+
+  useEffect(() => {
+    setShots([]); setPage(0); setHasMore(true);
     fetchShots(0, true);
-    
     if (user) {
       supabase.from("likes").select("shot_id").eq("user_id", user.id).then(({ data }) => {
         if (data) setLikedShots(data.map((l: any) => l.shot_id.toString()));
       });
     }
-  }, [user, followingOnly]); // Se activa cuando cambia user o followingOnly
+  }, [user, followingOnly]);
 
   useEffect(() => {
     async function fetchSavedShots() {
@@ -135,6 +148,14 @@ export default function HomeView() {
     }
     fetchSavedShots();
   }, [user]);
+
+  const handleDisapprove = async (shotId: string) => {
+    if (!isAdmin) return;
+    setShots(prev => prev.filter(s => s.id !== shotId));
+    setDisapprovingId(shotId);
+    await supabase.from('shots').update({ is_approved: false }).eq('id', shotId);
+    setDisapprovingId(null);
+  };
 
   const handleSaveShot = async (shotId: string) => {
     if (!user) return;
@@ -192,39 +213,68 @@ export default function HomeView() {
   }, []);
 
   return (
-    <section className="p-2">
-      {/* Indicador Visual del Filtro */}
+    <section className={`flex w-full ${followingOnly ? 'h-[calc(100vh-64px)]' : ''}`}>
+      
+      {/* SIDEBAR: Visible en móvil (1/3) y Escritorio */}
       {followingOnly && (
-         <div className="text-center text-yellow-400 text-xs font-bold py-2 bg-gray-900/50 border-b border-yellow-500/30 mb-2">
-            Mostrando shots de personas que sigues
-         </div>
+        <aside className="w-1/3 min-w-[100px] max-w-[200px] flex-shrink-0 border-r border-gray-800 bg-gray-900/50 overflow-y-auto pt-20 pb-4">
+            <div className="px-2 mb-2">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Mi Gente</h3>
+            </div>
+            <div className="space-y-1 px-1">
+                {followingUsers.length === 0 && (
+                    <div className="text-center text-gray-600 text-xs p-4">Vacío</div>
+                )}
+                {followingUsers.map((u) => (
+                    <button
+                        key={u.id}
+                        onClick={() => setSelectedProfileId(u.id)}
+                        className="w-full flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-gray-800 transition group"
+                    >
+                        <div className="w-10 h-10 rounded-full bg-gray-700 overflow-hidden flex items-center justify-center text-xs font-bold text-white border border-gray-600">
+                            {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover"/> : (u.username || "?").charAt(0).toUpperCase()}
+                        </div>
+                        {/* En móvil truncamos el texto para que quepa */}
+                        <span className="text-[10px] text-gray-300 group-hover:text-yellow-400 truncate w-full text-center">@{u.username}</span>
+                    </button>
+                ))}
+            </div>
+        </aside>
       )}
 
-      {shots.length === 0 && loading && ( <div className="text-center text-gray-500 py-8">Cargando experiencia...</div> )}
-      
-      {!loading && shots.length === 0 && (
-         <div className="text-center text-gray-500 py-8">
-            {followingOnly ? "Aún no sigues a nadie o no tienen shots." : "No hay shots para mostrar."}
-         </div>
-      )}
+      {/* CONTENIDO PRINCIPAL */}
+      <div className={`flex-1 p-2 overflow-y-auto ${followingOnly ? 'h-full' : ''}`}>
+        
+        {shots.length > 0 && (
+          <MasonryGrid 
+            shots={shots} 
+            setSelectedShot={setSelectedShot} 
+            savedShots={savedShots}
+            savingId={savingId}
+            onSaveShot={handleSaveShot}
+            user={user}
+            likedShots={likedShots}
+            likingId={likingId}
+            onLike={handleLike}
+            // Pasamos la clase dinámica
+            columnsClass={gridColumnsClass}
+            // Props de Admin
+            isAdmin={isAdmin}
+            onDisapprove={handleDisapprove}
+            disapprovingId={disapprovingId}
+          />
+        )}
+        
+        {loading && <div className="text-center py-4 text-gray-500">Cargando...</div>}
+        {!loading && shots.length === 0 && (
+             <div className="text-center text-gray-500 py-8">
+                {followingOnly ? "Aún no sigues a nadie o no tienen shots." : "No hay shots."}
+             </div>
+        )}
+        {!hasMore && !loading && shots.length > 0 && <div className="text-center py-4 text-gray-600 text-sm">Fin.</div>}
+      </div>
 
-      {shots.length > 0 && (
-        <MasonryGrid 
-          shots={shots} 
-          setSelectedShot={setSelectedShot} 
-          savedShots={savedShots}
-          savingId={savingId}
-          onSaveShot={handleSaveShot}
-          user={user}
-          likedShots={likedShots}
-          likingId={likingId}
-          onLike={handleLike}
-        />
-      )}
-      
-      {loading && shots.length > 0 && ( <div className="text-center py-4 text-gray-500">Descubriendo más shots...</div> )}
-      {!hasMore && !loading && shots.length > 0 && ( <div className="text-center py-4 text-gray-600 text-sm">Has llegado al fondo.</div> )}
-
+      {/* MODALES */}
       {selectedShot && (
         <ShotDetailModal 
           shot={shots.find(s => s.id === selectedShot.id) || selectedShot}
@@ -240,6 +290,14 @@ export default function HomeView() {
           onView={handleView}
         />
       )}
+
+      {selectedProfileId && (
+        <UserProfileOverlay 
+          userId={selectedProfileId}
+          onClose={() => setSelectedProfileId(null)}
+        />
+      )}
+
     </section>
   );
 }

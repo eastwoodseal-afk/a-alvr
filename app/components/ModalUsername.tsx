@@ -19,15 +19,20 @@ export default function ModalUsername({ open, userId, onClose }: ModalUsernamePr
     e.preventDefault();
     setLoading(true);
     setError("");
-    if (!username.trim()) {
+    
+    // FIX: Forzar minúsculas antes de guardar
+    const cleanUsername = username.trim().toLowerCase();
+
+    if (!cleanUsername) {
       setError("El nombre de usuario es obligatorio.");
       setLoading(false);
       return;
     }
+    
     // Actualizar el perfil en Supabase
     const { error: updateError } = await supabase
       .from("profiles")
-      .update({ username: username.trim() })
+      .update({ username: cleanUsername })
       .eq("id", userId);
     setLoading(false);
     if (updateError) {
