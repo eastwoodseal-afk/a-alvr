@@ -5,6 +5,7 @@ import MyShotDetailModal from "./MyShotDetailModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../lib/AuthContext";
 import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
+// Eliminamos import ShareDesktopModal
 
 const BATCH_SIZE = 20;
 
@@ -20,11 +21,12 @@ interface Shot {
 }
 
 export default function UserShots({ userId }: { userId: string }) {
+  const { user } = useAuth();
+  
   const [shots, setShots] = useState<Shot[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
-  const { user } = useAuth();
-
+  
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [initialLoad, setInitialLoad] = useState(true);
@@ -34,6 +36,8 @@ export default function UserShots({ userId }: { userId: string }) {
   
   const [likedShots, setLikedShots] = useState<string[]>([]);
   const [likingId, setLikingId] = useState<string | null>(null);
+
+  // Eliminamos estados y lógica del modal de compartir
 
   const fetchUserShots = useCallback(async (pageNum: number) => {
     if (!hasMore && pageNum > 0) return;
@@ -97,7 +101,6 @@ export default function UserShots({ userId }: { userId: string }) {
       const unsavedId = e.detail;
       setSavedShots(prev => prev.filter(id => id !== unsavedId));
     };
-
     window.addEventListener('shot-unsaved', handleUnsaveEvent as EventListener);
     return () => window.removeEventListener('shot-unsaved', handleUnsaveEvent as EventListener);
   }, []);
@@ -141,6 +144,8 @@ export default function UserShots({ userId }: { userId: string }) {
 
   return (
     <>
+      {/* Eliminado el botón flotante de aquí */}
+
       <MasonryGrid 
         shots={shots} 
         setSelectedShot={setSelectedShot} 
@@ -151,7 +156,7 @@ export default function UserShots({ userId }: { userId: string }) {
         likedShots={likedShots}
         likingId={likingId}
         onLike={handleLike}
-        hideViews={true} // <--- AQUÍ OCULTAMOS LAS VISTAS
+        hideViews={true}
       />
       
       {loading && !initialLoad && ( <div className="text-center py-4 text-gray-500">Cargando más...</div> )}

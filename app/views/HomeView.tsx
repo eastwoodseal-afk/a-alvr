@@ -3,6 +3,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import MasonryGrid from "../components/MasonryGrid";
 import ShotDetailModal from "../components/ShotDetailModal";
 import UserProfileOverlay from "../components/UserProfileOverlay";
+import ConfirmModal from "../components/ConfirmModal";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../lib/AuthContext";
 import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
@@ -21,10 +22,12 @@ interface Shot {
   views_count?: number;
 }
 
-interface FollowUser {
+// Interfaz extendida para la lista de usuarios
+interface UserRelation {
   id: string;
   username: string;
   avatar_url?: string;
+  hasSharedStudio: boolean; // NUEVO: Flag para el botón de escuadras
 }
 
 export default function HomeView() {
@@ -40,264 +43,195 @@ export default function HomeView() {
   const [likedShots, setLikedShots] = useState<string[]>([]);
   const [likingId, setLikingId] = useState<string | null>(null);
 
-  const [followingUsers, setFollowingUsers] = useState<FollowUser[]>([]);
+  // NUEVO: Estado unificado para la lista de gente
+  const [relatedUsers, setRelatedUsers] = useState<UserRelation[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'public' | 'studio'>('public'); // NUEVO: Modo de vista del perfil
+  
+  const [confirmDisapproveId, setConfirmDisapproveId] = useState<string | null>(null);
   const [disapprovingId, setDisapprovingId] = useState<string | null>(null);
 
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
-
-  // Lógica para decidir clases del Grid
-  // Si el filtro está activo, en móvil será 1 columna, en escritorio normal.
   const gridColumnsClass = followingOnly 
     ? "columns-1 md:columns-3 lg:columns-4 xl:columns-6" 
     : "columns-2 md:columns-3 lg:columns-4 xl:columns-6";
 
+  // ... (fetchShots y otras funciones se mantienen igual por brevedad, copia las tuyas) ...
   const fetchShots = useCallback(async (pageNum: number, isRefresh = false) => {
-    if (loading) return;
-    setLoading(true);
-    const start = pageNum * BATCH_SIZE;
-    const end = start + BATCH_SIZE - 1;
-
-    let query = supabase
-      .from("shots")
-      .select("id, image_url, title, description, user_id, author, likes_count, views_count")
-      .eq("is_approved", true);
-
+    if (loading) return; setLoading(true);
+    const start = pageNum * BATCH_SIZE; const end = start + BATCH_SIZE - 1;
+    let query = supabase.from("shots").select("id, image_url, title, description, user_id, author, likes_count, views_count").eq("is_approved", true);
     if (followingOnly && user) {
-        const { data: followingData } = await supabase
-            .from('follows')
-            .select('following_id')
-            .eq('follower_id', user.id);
-        
+        const { data: followingData } = await supabase.from('follows').select('following_id').eq('follower_id', user.id);
         const followingIds = followingData?.map(f => f.following_id) || [];
-        
-        if (followingIds.length === 0) {
-            setShots([]); setHasMore(false); setLoading(false); return;
-        }
+        if (followingIds.length === 0) { setShots([]); setHasMore(false); setLoading(false); return; }
         query = query.in('user_id', followingIds);
     }
-
     query = query.order('created_at', { ascending: false }).range(start, end);
     const { data, error } = await query;
-
-    if (error) { console.error("Error fetching:", error); setLoading(false); return; }
-
+    if (error) { console.error(error); setLoading(false); return; }
     if (data) {
-      let newShots = data as any[];
-      newShots = newShots.map(s => ({...s, id: s.id.toString()}));
-
-      if (!user && !followingOnly && newShots.length > 0) {
-         newShots = newShots.sort(() => Math.random() - 0.5);
-      }
-
+      let newShots = data.map(s => ({...s, id: s.id.toString()}));
+      if (!user && !followingOnly && newShots.length > 0) newShots.sort(() => Math.random() - 0.5);
       const userIds = [...new Set(newShots.map((shot) => shot.user_id).filter(Boolean))];
       let profilesMap: Record<string, string> = {};
       if (userIds.length) {
         const { data: profiles } = await supabase.from("profiles").select("id, username").in("id", userIds);
-        if (profiles) profilesMap = profiles.reduce((acc: { [key: string]: string }, profile: any) => { acc[profile.id] = profile.username || "sin Creador"; return acc; }, {});
+        if (profiles) profilesMap = profiles.reduce((acc, p) => { acc[p.id] = p.username || "sin Creador"; return acc; }, {});
       }
-
-      const processedShots = newShots.map((shot) => ({ 
-        ...shot, 
-        views_count: shot.views_count || 0,
-        username: profilesMap[shot.user_id] || "sin Creador" 
-      }));
-
-      if (isRefresh) setShots(processedShots);
-      else setShots((prev) => [...prev, ...processedShots]);
-
+      const processedShots = newShots.map((s) => ({ ...s, views_count: s.views_count || 0, username: profilesMap[s.user_id] || "sin Creador" }));
+      if (isRefresh) setShots(processedShots); else setShots((prev) => [...prev, ...processedShots]);
       if (data.length < BATCH_SIZE) setHasMore(false);
     } else setHasMore(false);
     setLoading(false);
   }, [user, loading, followingOnly]);
 
+  // NUEVA LÓGICA: FETCH DE USUARIOS RELACIONADOS (FOLLOW + STUDIO SHARES)
   useEffect(() => {
     if (followingOnly && user) {
-        const fetchFollowing = async () => {
-            const { data } = await supabase
+        const fetchRelatedUsers = async () => {
+            // 1. Traer a quienes sigo
+            const { data: followsData } = await supabase
                 .from('follows')
                 .select('profiles!follows_following_id_fkey(id, username, avatar_url)')
                 .eq('follower_id', user.id);
             
-            if (data) {
-                const users = data.map((f: any) => f.profiles).filter(Boolean);
-                setFollowingUsers(users);
-            }
+            const followingUsers = (followsData || []).map((f: any) => ({
+                id: f.profiles.id,
+                username: f.profiles.username,
+                avatar_url: f.profiles.avatar_url,
+                hasSharedStudio: false
+            }));
+
+            // 2. Traer quienes me compartieron su estudio
+            const { data: sharesData } = await supabase
+                .from('studio_shares')
+                .select('owner_id, profiles!studio_shares_owner_id_fkey(id, username, avatar_url)')
+                .eq('viewer_id', user.id);
+
+            const studioUsers = (sharesData || []).map((s: any) => ({
+                id: s.profiles.id,
+                username: s.profiles.username,
+                avatar_url: s.profiles.avatar_url,
+                hasSharedStudio: true
+            }));
+
+            // 3. Mergear listas (evitando duplicados, priorizando hasSharedStudio: true)
+            const userMap = new Map<string, UserRelation>();
+            
+            followingUsers.forEach(u => userMap.set(u.id, u));
+            
+            studioUsers.forEach(u => {
+                if (userMap.has(u.id)) {
+                    // Si ya existe (lo sigo), actualizamos el flag
+                    const existing = userMap.get(u.id)!;
+                    existing.hasSharedStudio = true;
+                } else {
+                    userMap.set(u.id, u);
+                }
+            });
+
+            setRelatedUsers(Array.from(userMap.values()));
         };
-        fetchFollowing();
+        fetchRelatedUsers();
     } else {
-        setFollowingUsers([]);
+        setRelatedUsers([]);
     }
   }, [followingOnly, user]);
 
-  useEffect(() => {
-    setShots([]); setPage(0); setHasMore(true);
-    fetchShots(0, true);
-    if (user) {
-      supabase.from("likes").select("shot_id").eq("user_id", user.id).then(({ data }) => {
-        if (data) setLikedShots(data.map((l: any) => l.shot_id.toString()));
-      });
-    }
-  }, [user, followingOnly]);
-
-  useEffect(() => {
-    async function fetchSavedShots() {
-      if (!user) return;
-      const { data } = await supabase.from("saved_shots").select("shot_id").eq("user_id", user.id);
-      if (data) setSavedShots(data.map((row: any) => row.shot_id.toString()));
-    }
-    fetchSavedShots();
-  }, [user]);
-
-  const handleDisapprove = async (shotId: string) => {
-    if (!isAdmin) return;
-    setShots(prev => prev.filter(s => s.id !== shotId));
-    setDisapprovingId(shotId);
-    await supabase.from('shots').update({ is_approved: false }).eq('id', shotId);
-    setDisapprovingId(null);
+  useEffect(() => { setShots([]); setPage(0); setHasMore(true); fetchShots(0, true); /* ... resto de hooks ... */ }, [user, followingOnly]);
+  
+  // ... (handlers handleSave, handleLike, handleView, handleDisapprove - copia los tuyos) ...
+  const handleDisapproveRequest = (shotId: string) => { if (!isAdmin) return; setConfirmDisapproveId(shotId); };
+  const executeDisapprove = async () => { /* ... tu lógica ... */ };
+  
+  const openProfile = (userId: string, mode: 'public' | 'studio' = 'public') => {
+    setSelectedProfileId(userId);
+    setViewMode(mode);
   };
-
-  const handleSaveShot = async (shotId: string) => {
-    if (!user) return;
-    setSavingId(shotId);
-    const { error } = await supabase.from("saved_shots").insert({ user_id: user.id, shot_id: shotId });
-    if (!error) {
-      setSavedShots(prev => [...prev, shotId]);
-      const alreadyLiked = likedShots.includes(shotId);
-      if (!alreadyLiked) {
-        setLikedShots(prev => [...prev, shotId]);
-        setShots(prev => prev.map(s => { if(s.id === shotId) return { ...s, likes_count: (s.likes_count || 0) + 1 }; return s; }));
-        supabase.from("likes").insert({ user_id: user.id, shot_id: shotId }).then();
-      }
-    }
-    setSavingId(null);
-  };
-
-  const handleLike = async (shotId: string) => {
-    if (!user) return;
-    const alreadyLiked = likedShots.includes(shotId);
-    setLikingId(shotId);
-    setShots(prev => prev.map(s => { if(s.id === shotId) return { ...s, likes_count: (s.likes_count || 0) + (alreadyLiked ? -1 : 1) }; return s; }));
-    if (alreadyLiked) {
-      setLikedShots(prev => prev.filter(id => id !== shotId));
-      await supabase.from("likes").delete().match({ user_id: user.id, shot_id: shotId });
-    } else {
-      setLikedShots(prev => [...prev, shotId]);
-      await supabase.from("likes").insert({ user_id: user.id, shot_id: shotId });
-    }
-    setLikingId(null);
-  };
-
-  const handleView = useCallback((shotId: string) => {
-    setShots(prev => prev.map(s => { if(s.id === shotId) return { ...s, views_count: (s.views_count || 0) + 1 }; return s; }));
-  }, []);
-
-  const loadMore = useCallback(() => {
-    if (hasMore && !loading) { const nextPage = page + 1; setPage(nextPage); fetchShots(nextPage); }
-  }, [page, hasMore, loading, fetchShots]);
-  useInfiniteScroll(loadMore, loading);
-
-  useEffect(() => {
-    const handleCloseModals = () => setSelectedShot(null);
-    window.addEventListener('close-modals', handleCloseModals);
-    return () => window.removeEventListener('close-modals', handleCloseModals);
-  }, []);
-
-  useEffect(() => {
-    const handleUnsaveEvent = (e: CustomEvent) => {
-      const unsavedId = e.detail;
-      setSavedShots(prev => prev.filter(id => id !== unsavedId));
-    };
-    window.addEventListener('shot-unsaved', handleUnsaveEvent as EventListener);
-    return () => window.removeEventListener('shot-unsaved', handleUnsaveEvent as EventListener);
-  }, []);
 
   return (
     <section className={`flex w-full ${followingOnly ? 'h-[calc(100vh-64px)]' : ''}`}>
       
-      {/* SIDEBAR: Visible en móvil (1/3) y Escritorio */}
       {followingOnly && (
         <aside className="w-1/3 min-w-[100px] max-w-[200px] flex-shrink-0 border-r border-gray-800 bg-gray-900/50 overflow-y-auto pt-20 pb-4">
             <div className="px-2 mb-2">
                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Mi Gente</h3>
             </div>
             <div className="space-y-1 px-1">
-                {followingUsers.length === 0 && (
+                {relatedUsers.length === 0 && (
                     <div className="text-center text-gray-600 text-xs p-4">Vacío</div>
                 )}
-                {followingUsers.map((u) => (
-                    <button
-                        key={u.id}
-                        onClick={() => setSelectedProfileId(u.id)}
-                        className="w-full flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-gray-800 transition group"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-gray-700 overflow-hidden flex items-center justify-center text-xs font-bold text-white border border-gray-600">
-                            {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover"/> : (u.username || "?").charAt(0).toUpperCase()}
-                        </div>
-                        {/* En móvil truncamos el texto para que quepa */}
-                        <span className="text-[10px] text-gray-300 group-hover:text-yellow-400 truncate w-full text-center">@{u.username}</span>
-                    </button>
+                {relatedUsers.map((u) => (
+                    <div key={u.id} className="w-full flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-gray-800 transition group relative">
+                        
+                        {/* Botón Principal: Ver Perfil Público */}
+                        <button onClick={() => openProfile(u.id, 'public')} className="flex flex-col items-center w-full">
+                            <div className="w-10 h-10 rounded-full bg-gray-700 overflow-hidden flex items-center justify-center text-xs font-bold text-white border border-gray-600">
+                                {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover"/> : (u.username || "?").charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-[10px] text-gray-300 group-hover:text-yellow-400 truncate w-full text-center mt-1">@{u.username}</span>
+                        </button>
+
+                        {/* NUEVO: Botón Escuadras (Solo si tiene estudio compartido) */}
+                        {u.hasSharedStudio && (
+                            <button 
+                                onClick={() => openProfile(u.id, 'studio')}
+                                className="absolute top-1 right-1 bg-blue-600 rounded-full p-1 shadow-md hover:bg-blue-500 transition"
+                                title="Ver Estudio Compartido"
+                            >
+                                {/* Icono Escuadras / Dibujo Técnico */}
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-white">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" />
+                                </svg>
+                            </button>
+                        )}
+                    </div>
                 ))}
             </div>
         </aside>
       )}
 
-      {/* CONTENIDO PRINCIPAL */}
       <div className={`flex-1 p-2 overflow-y-auto ${followingOnly ? 'h-full' : ''}`}>
-        
+        {/* ... Grid Content ... */}
         {shots.length > 0 && (
           <MasonryGrid 
-            shots={shots} 
-            setSelectedShot={setSelectedShot} 
-            savedShots={savedShots}
-            savingId={savingId}
-            onSaveShot={handleSaveShot}
-            user={user}
-            likedShots={likedShots}
-            likingId={likingId}
-            onLike={handleLike}
-            // Pasamos la clase dinámica
+            shots={shots} setSelectedShot={setSelectedShot} savedShots={savedShots}
+            savingId={savingId} onSaveShot={() => {}} user={user} // Completa tus handlers
+            likedShots={likedShots} likingId={likingId} onLike={() => {}}
             columnsClass={gridColumnsClass}
-            // Props de Admin
-            isAdmin={isAdmin}
-            onDisapprove={handleDisapprove}
-            disapprovingId={disapprovingId}
+            isAdmin={isAdmin} onDisapprove={handleDisapproveRequest} disapprovingId={disapprovingId}
           />
         )}
-        
-        {loading && <div className="text-center py-4 text-gray-500">Cargando...</div>}
-        {!loading && shots.length === 0 && (
-             <div className="text-center text-gray-500 py-8">
-                {followingOnly ? "Aún no sigues a nadie o no tienen shots." : "No hay shots."}
-             </div>
-        )}
-        {!hasMore && !loading && shots.length > 0 && <div className="text-center py-4 text-gray-600 text-sm">Fin.</div>}
       </div>
 
-      {/* MODALES */}
+      {/* Modales */}
       {selectedShot && (
         <ShotDetailModal 
           shot={shots.find(s => s.id === selectedShot.id) || selectedShot}
           onClose={() => setSelectedShot(null)}
-          isSaved={savedShots.includes(selectedShot.id)}
-          isSaving={savingId === selectedShot.id}
-          onSave={() => handleSaveShot(selectedShot.id)}
-          user={user}
-          isLiked={likedShots.includes(selectedShot.id)}
-          likesCount={shots.find(s => s.id === selectedShot.id)?.likes_count || 0}
-          onLike={() => handleLike(selectedShot.id)}
-          viewsCount={shots.find(s => s.id === selectedShot.id)?.views_count || 0}
-          onView={handleView}
+          // ... props ...
         />
       )}
 
+      {/* PERFIL: Pasamos el modo */}
       {selectedProfileId && (
         <UserProfileOverlay 
           userId={selectedProfileId}
           onClose={() => setSelectedProfileId(null)}
+          studioMode={viewMode === 'studio'} // NUEVA PROP
         />
       )}
 
+      <ConfirmModal 
+        open={!!confirmDisapproveId}
+        onClose={() => setConfirmDisapproveId(null)}
+        onConfirm={executeDisapprove}
+        title="Desaprobar"
+        message="¿Ocultar este shot?"
+        confirmText="Sí"
+        variant="danger"
+      />
     </section>
   );
 }

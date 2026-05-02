@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import SavedShotsDrawerOverlay from "./SavedShotsDrawerOverlay";
 import ProfileOverlay from "./ProfileOverlay";
 import AdminPanelOverlay from "./AdminPanelOverlay";
@@ -8,8 +9,8 @@ import ModalLogin from "./ModalLogin";
 import ModalUsername from "./ModalUsername";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../lib/AuthContext";
-import UserShots from "./UserShots";
 import NotificationBell from "./NotificationBell";
+import UserShotsOverlay from "./UserShotsOverlay";
 
 export default function Header() {
   const [showUsernameModal, setShowUsernameModal] = useState(false);
@@ -74,16 +75,12 @@ export default function Header() {
         {/* --- LADO IZQUIERDO: LOGO --- */}
         <div className="flex flex-col gap-0">
           <div className="flex items-center gap-4">
-            <button
+                        <button
               className="bg-yellow-500 rounded-full px-2 h-7 text-lg flex items-center gap-0"
               style={{ fontFamily: 'Times New Roman, Times, serif', fontWeight: 400 }}
               onClick={() => {
-                window.dispatchEvent(new Event('close-modals'));
-                if (anythingOpen) {
-                  closeAllOverlays();
-                } else if (pathname !== '/') {
-                  router.push('/');
-                }
+                // CORRECCIÓN: Fuerza ir a Inicio y recarga completa
+                window.location.href = '/';
               }}
             >
               <span className="text-black">A'AL</span><span className="text-gray-500">VR</span>
@@ -102,11 +99,44 @@ export default function Header() {
         {/* --- LADO DERECHO --- */}
         <div className="flex items-center gap-4">
             
-            {/* BLOQUE 1: FILTRO "MI GENTE" (SIMPLIFICADO) */}
+            {/* MANIFIESTO (Modo Interruptor) */}
+            <Link 
+                href={pathname === '/about' ? '/' : '/about'}
+                className={`rounded-full h-7 w-7 flex items-center justify-center transition-all duration-200 border ${
+                  pathname === '/about' 
+                    ? 'bg-yellow-500 text-black border-yellow-500' 
+                    : 'bg-transparent text-gray-500 hover:bg-gray-700 hover:text-white border-gray-700'
+                }`}
+                title="Manifiesto"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                </svg>
+            </Link>
+
+                        {/* NUEVO: HOME (Tipi / Triángulo Sólido) */}
+            <button 
+                onClick={() => {
+                  if (anythingOpen) {
+                    closeAllOverlays();
+                  } else if (pathname !== '/') {
+                    router.push('/');
+                  }
+                }}
+                className="rounded-full h-7 w-7 flex items-center justify-center transition-all duration-200 bg-gray-700 text-gray-200 hover:bg-yellow-500 hover:text-black border border-gray-700 hover:border-yellow-500 group"
+                title="Inicio"
+            >
+                {/* Icono Triángulo Isósceles Relleno (Tipi) */}
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                    <path d="M12 4L3 20h18L12 4z" />
+                </svg>
+            </button>
+
+            {/* MI GENTE */}
             {user && (
               <div className="flex items-center">
                 <button
-                    onClick={toggleFollowingFilter} // Directamente togglea el estado
+                    onClick={toggleFollowingFilter}
                     className={`rounded-full h-7 w-7 flex items-center justify-center border transition-all duration-200 ${followingOnly ? 'bg-yellow-500 border-yellow-400 text-black' : 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600'}`}
                     title={followingOnly ? "Ver todo" : "Mi Gente"}
                 >
@@ -117,10 +147,10 @@ export default function Header() {
               </div>
             )}
 
-            {/* BLOQUE 2: CAMPANA DE NOTIFICACIONES */}
+            {/* CAMPANA */}
             {user && <NotificationBell />}
 
-            {/* BLOQUE 3: USUARIO */}
+            {/* USUARIO */}
             {loading ? (
               <div className="flex items-center justify-center h-7 w-7">
                 <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-yellow-500"></div>
@@ -242,15 +272,10 @@ export default function Header() {
       {showAdminPanel && <AdminPanelOverlay onClose={() => setShowAdminPanel(false)} />}
 
       {showShotsOverlay && (
-        <div className="fixed inset-0 top-[56px] z-20 flex flex-col items-center justify-start" style={{ minHeight: 'calc(100vh - 56px)', background: '#0a1833' }}>
-          <div className="w-full rounded-b-2xl shadow-2xl p-2 pt-2 text-gray-200 flex flex-col items-center relative" style={{ minHeight: 'calc(100vh - 56px)', background: 'transparent' }}>
-            <div className="w-full flex items-center px-4 py-3 sticky top-0 bg-[#0a1833] z-10" style={{ borderBottom: '1px solid #facc15' }}>
-              <button className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-7 h-7 flex items-center justify-center text-xl font-bold shadow mr-2" onClick={() => setShowShotsOverlay(false)} aria-label="Cerrar"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg></button>
-              <h2 className="text-left text-base font-semibold">Mis Shots</h2>
-            </div>
-            <div className="w-full flex-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}><UserShots userId={user?.id ?? ""} /></div>
-          </div>
-        </div>
+        <UserShotsOverlay 
+          userId={user?.id ?? ""} 
+          onClose={() => setShowShotsOverlay(false)} 
+        />
       )}
       
       {showSavedShotsOverlay && <SavedShotsDrawerOverlay userId={user?.id} onClose={() => setShowSavedShotsOverlay(false)} initialView={savedShotsInitialView} />}

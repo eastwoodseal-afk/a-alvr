@@ -18,7 +18,7 @@ interface MasonryGridProps {
   isAdmin?: boolean;
   onDisapprove?: (id: string) => void;
   disapprovingId?: string | null;
-  columnsClass?: string; // NUEVA PROP
+  columnsClass?: string;
 }
 
 export default function MasonryGrid({ 
@@ -36,10 +36,11 @@ export default function MasonryGrid({
   isAdmin,
   onDisapprove,
   disapprovingId,
-  columnsClass = "columns-2 md:columns-3 lg:columns-4 xl:columns-6" // Default si no se pasa
+  columnsClass = "columns-2 md:columns-3 lg:columns-4 xl:columns-6" // Default actualizado
 }: MasonryGridProps) {
   return (
-    <div className={`${columnsClass} gap-2 w-full xl:w-screen xl:max-w-none pt-20`}>
+    // CORRECCIÓN: Eliminado xl:w-screen xl:max-w-none
+    <div className={`${columnsClass} gap-2 w-full pt-20`}>
       {shots.map((shot) => (
         <ShotCard
           key={shot.id}

@@ -6,11 +6,12 @@ import MasonryGrid from "./MasonryGrid";
 import ShotDetailModal from "./ShotDetailModal";
 
 interface Props {
-  userId: string; // El ID del usuario que estamos viendo
+  userId: string;
   onClose: () => void;
+  studioMode?: boolean; // Prop para activar el modo estudio
 }
 
-export default function UserProfileOverlay({ userId, onClose }: Props) {
+export default function UserProfileOverlay({ userId, onClose, studioMode = false }: Props) {
   const { user: currentUser } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [shots, setShots] = useState<any[]>([]);
@@ -28,42 +29,53 @@ export default function UserProfileOverlay({ userId, onClose }: Props) {
     fetchShots();
     checkFollowStatus();
     fetchUserInteractions();
-  }, [userId, currentUser]);
+  }, [userId, currentUser, studioMode]);
 
   const fetchProfile = async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (data) setProfile(data);
   };
 
   const fetchShots = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('shots')
-      .select('id, image_url, title, description, user_id, author, likes_count, views_count')
-      .eq('user_id', userId)
-      .eq('is_approved', true) // Solo shots aprobados
-      .order('created_at', { ascending: false });
+    let data = null;
+    let error = null;
+
+    if (studioMode) {
+        // LLAMADA RPC: Usa la función segura get_studio_shots
+        const response = await supabase.rpc('get_studio_shots', { p_owner_id: userId });
+        data = response.data;
+        error = response.error;
+    } else {
+        // QUERY NORMAL: Vista pública (solo aprobados)
+        const response = await supabase
+            .from('shots')
+            .select('id, image_url, title, description, user_id, author, likes_count, views_count')
+            .eq('user_id', userId)
+            .eq('is_approved', true)
+            .order('created_at', { ascending: false });
+        data = response.data;
+        error = response.error;
+    }
     
-    if (data) {
-      const formatted = data.map(s => ({...s, id: s.id.toString(), username: profile?.username}));
-      setShots(formatted);
+    if (error) {
+        console.error("Error loading studio/shots", error);
+        setShots([]);
+    } else if (data) {
+        // Normalizar datos
+        const formatted = data.map((s: any) => ({
+            ...s, 
+            id: s.id.toString(), 
+            username: profile?.username
+        }));
+        setShots(formatted);
     }
     setLoading(false);
   };
 
   const checkFollowStatus = async () => {
     if (!currentUser || currentUser.id === userId) return;
-    const { data } = await supabase
-      .from('follows')
-      .select('follower_id')
-      .eq('follower_id', currentUser.id)
-      .eq('following_id', userId)
-      .maybeSingle();
+    const { data } = await supabase.from('follows').select('follower_id').eq('follower_id', currentUser.id).eq('following_id', userId).maybeSingle();
     setIsFollowing(!!data);
   };
 
@@ -84,14 +96,8 @@ export default function UserProfileOverlay({ userId, onClose }: Props) {
       const { data, error } = await supabase.rpc('toggle_follow', { target_user_id: userId });
       if (error) throw error;
       setIsFollowing(data);
-      // Actualizamos contador local
-      setProfile((prev: any) => ({
-        ...prev, 
-        followers_count: (prev.followers_count || 0) + (data ? 1 : -1)
-      }));
-    } catch (err) {
-      console.error(err);
-    }
+      setProfile((prev: any) => ({ ...prev, followers_count: (prev.followers_count || 0) + (data ? 1 : -1) }));
+    } catch (err) { console.error(err); }
     setFollowLoading(false);
   };
 
@@ -115,85 +121,73 @@ export default function UserProfileOverlay({ userId, onClose }: Props) {
 
   const isOwnProfile = currentUser?.id === userId;
 
-  if (!profile && !loading) return <div className="fixed inset-0 bg-black flex items-center justify-center text-white z-[60]">Usuario no encontrado <button onClick={onClose} className="ml-4 text-red-500">Cerrar</button></div>;
-
   return (
-    <div className="fixed inset-0 z-[60] bg-black bg-opacity-90 flex flex-col overflow-y-auto" onClick={onClose}>
-      <div className="w-full max-w-4xl mx-auto p-4 pt-20 pb-10" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[60] bg-black flex flex-col" onClick={onClose}>
+      <div className="w-full max-w-4xl mx-auto flex flex-col h-full" onClick={e => e.stopPropagation()}>
         
-        {/* --- HEADER DEL PERFIL --- */}
-        <div className="flex flex-col md:flex-row items-center gap-6 mb-8 bg-gray-900 p-6 rounded-2xl border border-gray-800 relative">
-            <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-white text-2xl">&times;</button>
+        {/* --- HEADER ULTRA COMPACTO --- */}
+        <div className="flex items-center gap-2 p-2 md:p-3 bg-gray-900 border-b border-gray-800 flex-shrink-0">
+            <button onClick={onClose} className="text-gray-400 hover:text-white text-xl font-bold mr-1">&times;</button>
             
-            {/* Avatar Grande */}
-            <div className="w-24 h-24 rounded-full bg-gray-700 overflow-hidden border-4 border-yellow-500 shadow-lg flex-shrink-0">
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gray-700 overflow-hidden border-2 border-yellow-500 shadow-lg flex-shrink-0 flex items-center justify-center">
                 {profile?.avatar_url ? (
                     <img src={profile.avatar_url} className="w-full h-full object-cover" />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center text-3xl text-white font-bold">
-                        {(profile?.username || "?").charAt(0).toUpperCase()}
-                    </div>
+                    <span className="text-lg text-white font-bold">{(profile?.username || "?").charAt(0).toUpperCase()}</span>
                 )}
             </div>
 
-            {/* Info */}
-            <div className="flex-1 text-center md:text-left">
-                <h2 className="text-2xl font-bold text-white">{profile?.username || "Cargando..."}</h2>
-                {profile?.role === 'admin' && <span className="text-xs bg-red-600 px-2 py-0.5 rounded text-white ml-2">Admin</span>}
-                {profile?.role === 'superadmin' && <span className="text-xs bg-purple-600 px-2 py-0.5 rounded text-white ml-2">Superadmin</span>}
-                
-                <p className="text-gray-400 text-sm mt-1">Arquitecto / Creador</p> {/* Podríamos añadir campo bio luego */}
-
-                <div className="flex gap-6 mt-4 justify-center md:justify-start">
-                    <div className="text-center">
-                        <div className="text-lg font-bold text-white">{profile?.followers_count || 0}</div>
-                        <div className="text-xs text-gray-500">Seguidores</div>
-                    </div>
-                    <div className="text-center">
-                        <div className="text-lg font-bold text-white">{profile?.following_count || 0}</div>
-                        <div className="text-xs text-gray-500">Siguiendo</div>
-                    </div>
-                    <div className="text-center">
-                        <div className="text-lg font-bold text-white">{shots.length}</div>
-                        <div className="text-xs text-gray-500">Shots</div>
-                    </div>
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                <div className="flex items-center gap-1 truncate">
+                    <span className="text-sm md:text-base font-bold text-white truncate">@{profile?.username || "..."}</span>
+                    {/* Badge de Estudio */}
+                    {studioMode && (
+                        <span className="text-[8px] bg-blue-600 px-1.5 py-0.5 rounded text-white font-bold animate-pulse">ESTUDIO</span>
+                    )}
+                    {profile?.role === 'admin' && <span className="text-[8px] bg-red-600 px-1 rounded text-white">Admin</span>}
+                    {profile?.role === 'superadmin' && <span className="text-[8px] bg-purple-600 px-1 rounded text-white">SA</span>}
+                </div>
+                <div className="flex items-center gap-2 text-[10px] md:text-xs text-gray-400">
+                    <span><strong className="text-white">{profile?.followers_count || 0}</strong> Seg.</span>
+                    <span><strong className="text-white">{profile?.following_count || 0}</strong> Sig.</span>
+                    <span><strong className="text-white">{shots.length}</strong> Shots</span>
                 </div>
             </div>
 
-            {/* Acciones */}
-            <div className="flex-shrink-0">
-                {!isOwnProfile && currentUser && (
-                    <button 
-                        onClick={handleToggleFollow}
-                        disabled={followLoading}
-                        className={`px-6 py-2 rounded-lg font-bold transition-all shadow-lg ${isFollowing ? 'bg-gray-700 text-white hover:bg-gray-600 border border-gray-600' : 'bg-yellow-500 text-black hover:bg-yellow-400'}`}
-                    >
-                        {followLoading ? "..." : isFollowing ? "Siguiendo" : "Seguir"}
-                    </button>
-                )}
-            </div>
+            {!isOwnProfile && currentUser && !studioMode && (
+                <button 
+                    onClick={handleToggleFollow}
+                    disabled={followLoading}
+                    className={`px-3 py-1 rounded font-bold transition-all text-xs ${isFollowing ? 'bg-gray-700 text-white hover:bg-gray-600 border border-gray-600' : 'bg-yellow-500 text-black hover:bg-yellow-400'}`}
+                >
+                    {followLoading ? "..." : isFollowing ? "Siguiendo" : "Seguir"}
+                </button>
+            )}
         </div>
 
-        {/* --- GRID DE SHOTS --- */}
-        {loading ? (
-            <div className="text-center text-gray-500 py-20">Cargando portfolio...</div>
-        ) : shots.length === 0 ? (
-            <div className="text-center text-gray-600 py-20">Este usuario aún no ha subido shots.</div>
-        ) : (
-            <MasonryGrid 
-                shots={shots}
-                setSelectedShot={setSelectedShot}
-                savedShots={savedShots}
-                savingId={null}
-                onSaveShot={handleSave}
-                user={currentUser}
-                likedShots={likedShots}
-                likingId={null}
-                onLike={handleLike}
-            />
-        )}
+        {/* --- CONTENIDO SCROLLABLE --- */}
+        <div className="flex-1 overflow-y-auto p-2 md:p-4">
+            {loading ? (
+                <div className="text-center text-gray-500 py-20 text-sm">Cargando estudio...</div>
+            ) : shots.length === 0 ? (
+                <div className="text-center text-gray-600 py-20 text-sm">
+                    {studioMode ? "El estudio está vacío." : "Sin shots públicos."}
+                </div>
+            ) : (
+                <MasonryGrid 
+                    shots={shots}
+                    setSelectedShot={setSelectedShot}
+                    savedShots={savedShots}
+                    savingId={null}
+                    onSaveShot={handleSave}
+                    user={currentUser}
+                    likedShots={likedShots}
+                    likingId={null}
+                    onLike={handleLike}
+                />
+            )}
+        </div>
 
-        {/* Modal detalle si clican un shot */}
         {selectedShot && (
             <ShotDetailModal 
                 shot={selectedShot}
