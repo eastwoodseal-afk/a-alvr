@@ -56,7 +56,6 @@ export default function HomeView() {
     ? "columns-1 md:columns-3 lg:columns-4 xl:columns-6" 
     : "columns-2 md:columns-3 lg:columns-4 xl:columns-6";
 
-  // ... (fetchShots y otras funciones se mantienen igual por brevedad, copia las tuyas) ...
   const fetchShots = useCallback(async (pageNum: number, isRefresh = false) => {
     if (loading) return; setLoading(true);
     const start = pageNum * BATCH_SIZE; const end = start + BATCH_SIZE - 1;
@@ -77,7 +76,8 @@ export default function HomeView() {
       let profilesMap: Record<string, string> = {};
       if (userIds.length) {
         const { data: profiles } = await supabase.from("profiles").select("id, username").in("id", userIds);
-        if (profiles) profilesMap = profiles.reduce((acc, p) => { acc[p.id] = p.username || "sin Creador"; return acc; }, {});
+        // CORRECCIÓN AQUÍ: Tipado explícito en el reduce
+        if (profiles) profilesMap = profiles.reduce((acc: Record<string, string>, p) => { acc[p.id] = p.username || "sin Creador"; return acc; }, {} as Record<string, string>);
       }
       const processedShots = newShots.map((s) => ({ ...s, views_count: s.views_count || 0, username: profilesMap[s.user_id] || "sin Creador" }));
       if (isRefresh) setShots(processedShots); else setShots((prev) => [...prev, ...processedShots]);
@@ -139,16 +139,82 @@ export default function HomeView() {
     }
   }, [followingOnly, user]);
 
-  useEffect(() => { setShots([]); setPage(0); setHasMore(true); fetchShots(0, true); /* ... resto de hooks ... */ }, [user, followingOnly]);
+  useEffect(() => { 
+    setShots([]); 
+    setPage(0); 
+    setHasMore(true); 
+    fetchShots(0, true); 
+    
+    async function fetchUserInteractions() {
+      if (!user) return;
+      const [savedRes, likedRes] = await Promise.all([
+        supabase.from("saved_shots").select("shot_id").eq("user_id", user.id),
+        supabase.from("likes").select("shot_id").eq("user_id", user.id)
+      ]);
+      if (savedRes.data) setSavedShots(savedRes.data.map((s: any) => s.shot_id.toString()));
+      if (likedRes.data) setLikedShots(likedRes.data.map((l: any) => l.shot_id.toString()));
+    }
+    fetchUserInteractions();
+  }, [user, followingOnly]);
   
-  // ... (handlers handleSave, handleLike, handleView, handleDisapprove - copia los tuyos) ...
+  const handleSave = async (shotId: string) => {
+    if (!user) return;
+    setSavingId(shotId);
+    await supabase.from("saved_shots").insert({ user_id: user.id, shot_id: shotId });
+    setSavedShots(prev => [...prev, shotId]);
+    setSavingId(null);
+  };
+
+  const handleLike = async (shotId: string) => {
+    if (!user) return;
+    const alreadyLiked = likedShots.includes(shotId);
+    setLikingId(shotId);
+    
+    setShots(prev => prev.map(s => {
+      if(s.id === shotId) return { ...s, likes_count: (s.likes_count || 0) + (alreadyLiked ? -1 : 1) };
+      return s;
+    }));
+
+    if (alreadyLiked) {
+        setLikedShots(prev => prev.filter(id => id !== shotId));
+        await supabase.from("likes").delete().match({ user_id: user.id, shot_id: shotId });
+    } else {
+        setLikedShots(prev => [...prev, shotId]);
+        await supabase.from("likes").insert({ user_id: user.id, shot_id: shotId });
+    }
+    setLikingId(null);
+  };
+
+  const handleView = async (shotId: string) => {
+    // Increment view logic handled inside modal usually, but here for safety
+    await supabase.rpc('increment_view', { shot_id: parseInt(shotId) });
+  };
+
   const handleDisapproveRequest = (shotId: string) => { if (!isAdmin) return; setConfirmDisapproveId(shotId); };
-  const executeDisapprove = async () => { /* ... tu lógica ... */ };
+  
+  const executeDisapprove = async () => {
+    if (!confirmDisapproveId) return;
+    setDisapprovingId(confirmDisapproveId);
+    const { error } = await supabase.from('shots').update({ is_approved: false }).eq('id', confirmDisapproveId);
+    if (!error) setShots(prev => prev.filter(s => s.id !== confirmDisapproveId));
+    setDisapprovingId(null);
+    setConfirmDisapproveId(null);
+  };
   
   const openProfile = (userId: string, mode: 'public' | 'studio' = 'public') => {
     setSelectedProfileId(userId);
     setViewMode(mode);
   };
+
+  const loadMore = useCallback(() => {
+    if (hasMore && !loading) { 
+      const nextPage = page + 1; 
+      setPage(nextPage); 
+      fetchShots(nextPage); 
+    }
+  }, [page, hasMore, loading, fetchShots]);
+
+  useInfiniteScroll(loadMore, loading);
 
   return (
     <section className={`flex w-full ${followingOnly ? 'h-[calc(100vh-64px)]' : ''}`}>
@@ -193,24 +259,44 @@ export default function HomeView() {
       )}
 
       <div className={`flex-1 p-2 overflow-y-auto ${followingOnly ? 'h-full' : ''}`}>
-        {/* ... Grid Content ... */}
+        {loading && shots.length === 0 && <div className="text-center py-8 text-gray-400">Cargando Ateneo...</div>}
+        
         {shots.length > 0 && (
           <MasonryGrid 
-            shots={shots} setSelectedShot={setSelectedShot} savedShots={savedShots}
-            savingId={savingId} onSaveShot={() => {}} user={user} // Completa tus handlers
-            likedShots={likedShots} likingId={likingId} onLike={() => {}}
+            shots={shots} 
+            setSelectedShot={setSelectedShot} 
+            savedShots={savedShots}
+            savingId={savingId} 
+            onSaveShot={handleSave} 
+            user={user}
+            likedShots={likedShots} 
+            likingId={likingId} 
+            onLike={handleLike}
             columnsClass={gridColumnsClass}
-            isAdmin={isAdmin} onDisapprove={handleDisapproveRequest} disapprovingId={disapprovingId}
+            isAdmin={isAdmin} 
+            onDisapprove={handleDisapproveRequest} 
+            disapprovingId={disapprovingId}
           />
         )}
+        
+        {loading && shots.length > 0 && <div className="text-center py-4 text-gray-500">Cargando más...</div>}
+        {!hasMore && !loading && shots.length > 0 && <div className="text-center py-4 text-gray-600 text-sm">Fin del Ateneo.</div>}
       </div>
 
       {/* Modales */}
       {selectedShot && (
         <ShotDetailModal 
-          shot={shots.find(s => s.id === selectedShot.id) || selectedShot}
+          shot={selectedShot}
           onClose={() => setSelectedShot(null)}
-          // ... props ...
+          isSaved={savedShots.includes(selectedShot.id)}
+          isSaving={savingId === selectedShot.id}
+          onSave={() => handleSave(selectedShot.id)}
+          user={user}
+          isLiked={likedShots.includes(selectedShot.id)}
+          likesCount={selectedShot.likes_count || 0}
+          onLike={() => handleLike(selectedShot.id)}
+          viewsCount={selectedShot.views_count || 0}
+          onView={handleView}
         />
       )}
 
