@@ -123,7 +123,8 @@ export default function UserProfileOverlay({ userId, onClose, studioMode = false
 
   return (
     <div className="fixed inset-0 z-[60] bg-black flex flex-col" onClick={onClose}>
-      <div className="w-full max-w-4xl mx-auto flex flex-col h-full" onClick={e => e.stopPropagation()}>
+      {/* CONTENEDOR FULL WIDTH (Sin max-w-4xl) */}
+      <div className="w-full h-full flex flex-col" onClick={e => e.stopPropagation()}>
         
         {/* --- HEADER ULTRA COMPACTO --- */}
         <div className="flex items-center gap-2 p-2 md:p-3 bg-gray-900 border-b border-gray-800 flex-shrink-0">

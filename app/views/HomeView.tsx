@@ -22,12 +22,11 @@ interface Shot {
   views_count?: number;
 }
 
-// Interfaz extendida para la lista de usuarios
 interface UserRelation {
   id: string;
   username: string;
   avatar_url?: string;
-  hasSharedStudio: boolean; // NUEVO: Flag para el botón de escuadras
+  hasSharedStudio: boolean;
 }
 
 export default function HomeView() {
@@ -43,10 +42,9 @@ export default function HomeView() {
   const [likedShots, setLikedShots] = useState<string[]>([]);
   const [likingId, setLikingId] = useState<string | null>(null);
 
-  // NUEVO: Estado unificado para la lista de gente
   const [relatedUsers, setRelatedUsers] = useState<UserRelation[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'public' | 'studio'>('public'); // NUEVO: Modo de vista del perfil
+  const [viewMode, setViewMode] = useState<'public' | 'studio'>('public');
   
   const [confirmDisapproveId, setConfirmDisapproveId] = useState<string | null>(null);
   const [disapprovingId, setDisapprovingId] = useState<string | null>(null);
@@ -76,7 +74,6 @@ export default function HomeView() {
       let profilesMap: Record<string, string> = {};
       if (userIds.length) {
         const { data: profiles } = await supabase.from("profiles").select("id, username").in("id", userIds);
-        // CORRECCIÓN AQUÍ: Tipado explícito en el reduce
         if (profiles) profilesMap = profiles.reduce((acc: Record<string, string>, p) => { acc[p.id] = p.username || "sin Creador"; return acc; }, {} as Record<string, string>);
       }
       const processedShots = newShots.map((s) => ({ ...s, views_count: s.views_count || 0, username: profilesMap[s.user_id] || "sin Creador" }));
@@ -86,11 +83,9 @@ export default function HomeView() {
     setLoading(false);
   }, [user, loading, followingOnly]);
 
-  // NUEVA LÓGICA: FETCH DE USUARIOS RELACIONADOS (FOLLOW + STUDIO SHARES)
   useEffect(() => {
     if (followingOnly && user) {
         const fetchRelatedUsers = async () => {
-            // 1. Traer a quienes sigo
             const { data: followsData } = await supabase
                 .from('follows')
                 .select('profiles!follows_following_id_fkey(id, username, avatar_url)')
@@ -103,7 +98,6 @@ export default function HomeView() {
                 hasSharedStudio: false
             }));
 
-            // 2. Traer quienes me compartieron su estudio
             const { data: sharesData } = await supabase
                 .from('studio_shares')
                 .select('owner_id, profiles!studio_shares_owner_id_fkey(id, username, avatar_url)')
@@ -116,14 +110,12 @@ export default function HomeView() {
                 hasSharedStudio: true
             }));
 
-            // 3. Mergear listas (evitando duplicados, priorizando hasSharedStudio: true)
             const userMap = new Map<string, UserRelation>();
             
             followingUsers.forEach(u => userMap.set(u.id, u));
             
             studioUsers.forEach(u => {
                 if (userMap.has(u.id)) {
-                    // Si ya existe (lo sigo), actualizamos el flag
                     const existing = userMap.get(u.id)!;
                     existing.hasSharedStudio = true;
                 } else {
@@ -186,7 +178,6 @@ export default function HomeView() {
   };
 
   const handleView = async (shotId: string) => {
-    // Increment view logic handled inside modal usually, but here for safety
     await supabase.rpc('increment_view', { shot_id: parseInt(shotId) });
   };
 
@@ -219,39 +210,55 @@ export default function HomeView() {
   return (
     <section className={`flex w-full ${followingOnly ? 'h-[calc(100vh-64px)]' : ''}`}>
       
+      {/* --- SIDEBAR RELACIONES (LAYOUT VERTICAL) --- */}
       {followingOnly && (
-        <aside className="w-1/3 min-w-[100px] max-w-[200px] flex-shrink-0 border-r border-gray-800 bg-gray-900/50 overflow-y-auto pt-20 pb-4">
+        <aside className="w-1/4 min-w-[80px] max-w-[160px] flex-shrink-0 border-r border-gray-800 bg-gray-900/50 overflow-y-auto pt-20 pb-4">
             <div className="px-2 mb-2">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Mi Gente</h3>
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider text-left pl-1">RELACIONES</h3>
             </div>
             <div className="space-y-1 px-1">
                 {relatedUsers.length === 0 && (
                     <div className="text-center text-gray-600 text-xs p-4">Vacío</div>
                 )}
                 {relatedUsers.map((u) => (
-                    <div key={u.id} className="w-full flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-gray-800 transition group relative">
+                    // CONTENEDOR FLEX COL
+                    <div key={u.id} className="w-full flex flex-col items-center gap-1 p-1">
                         
-                        {/* Botón Principal: Ver Perfil Público */}
-                        <button onClick={() => openProfile(u.id, 'public')} className="flex flex-col items-center w-full">
-                            <div className="w-10 h-10 rounded-full bg-gray-700 overflow-hidden flex items-center justify-center text-xs font-bold text-white border border-gray-600">
-                                {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover"/> : (u.username || "?").charAt(0).toUpperCase()}
-                            </div>
-                            <span className="text-[10px] text-gray-300 group-hover:text-yellow-400 truncate w-full text-center mt-1">@{u.username}</span>
-                        </button>
-
-                        {/* NUEVO: Botón Escuadras (Solo si tiene estudio compartido) */}
-                        {u.hasSharedStudio && (
+                        {/* FILA SUPERIOR: Avatar + Botón Estudio */}
+                        <div className="w-full flex items-center justify-center gap-1">
+                            
+                            {/* BOTÓN PERFIL (Avatar) */}
                             <button 
-                                onClick={() => openProfile(u.id, 'studio')}
-                                className="absolute top-1 right-1 bg-blue-600 rounded-full p-1 shadow-md hover:bg-blue-500 transition"
-                                title="Ver Estudio Compartido"
+                                onClick={() => openProfile(u.id, 'public')} 
+                                className="flex flex-col items-center hover:opacity-80 transition"
                             >
-                                {/* Icono Escuadras / Dibujo Técnico */}
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-white">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" />
-                                </svg>
+                                <div className="w-7 h-7 rounded-full bg-gray-700 overflow-hidden flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white border border-gray-600">
+                                    {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover"/> : (u.username || "?").charAt(0).toUpperCase()}
+                                </div>
                             </button>
-                        )}
+
+                            {/* BOTÓN ESTUDIO (28px) */}
+                            {u.hasSharedStudio && (
+                                <button 
+                                    onClick={() => openProfile(u.id, 'studio')}
+                                    className="bg-blue-600 rounded-full w-[28px] h-[28px] flex items-center justify-center shadow hover:bg-blue-500 transition flex-shrink-0"
+                                    title="Ver Estudio Compartido"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 text-white">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" />
+                                    </svg>
+                                </button>
+                            )}
+                        </div>
+
+                        {/* NOMBRE (Debajo del avatar) */}
+                        <button 
+                            onClick={() => openProfile(u.id, 'public')} 
+                            className="w-full text-center hover:opacity-80 transition"
+                        >
+                            <span className="text-[10px] text-gray-400 truncate block px-1">@{u.username}</span>
+                        </button>
+                        
                     </div>
                 ))}
             </div>
@@ -300,12 +307,11 @@ export default function HomeView() {
         />
       )}
 
-      {/* PERFIL: Pasamos el modo */}
       {selectedProfileId && (
         <UserProfileOverlay 
           userId={selectedProfileId}
           onClose={() => setSelectedProfileId(null)}
-          studioMode={viewMode === 'studio'} // NUEVA PROP
+          studioMode={viewMode === 'studio'}
         />
       )}
 
