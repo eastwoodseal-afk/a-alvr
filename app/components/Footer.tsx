@@ -1,8 +1,8 @@
 "use client";
-"use client";
 import React, { useState } from "react";
 import ModalCreateShot from "./ModalCreateShot";
 import { useAuth } from "../../lib/AuthContext";
+import { hasPermission } from "../../lib/roleUtils"; // NUEVO: Importamos la regla de oro
 
 export default function Footer() {
   const [showMenu, setShowMenu] = useState(false);
@@ -23,20 +23,24 @@ export default function Footer() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showMenu]);
 
+  // NUEVO: Evaluamos el permiso, no el rol directo
+  const canCreate = user ? hasPermission(user.role, 'canCreateShots') : false;
+
   return (
-    <footer className="w-full py-4 px-6 bg-gray-800 text-gray-200 text-sm mt-auto flex items-center justify-end relative">
+    <footer className="fixed bottom-0 left-0 right-0 w-full h-16 py-4 px-6 bg-gray-800 text-gray-200 text-sm flex items-center justify-end z-40 border-t border-gray-700">
       <div className="relative">
         <div className="relative inline-block group">
           <button
             id="footer-menu-btn"
-            className={`bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center shadow ${!user || user?.role === 'subscriber' ? 'opacity-50 cursor-not-allowed' : ''}`}
-            onClick={() => user && user.role !== 'subscriber' && setShowMenu((prev) => !prev)}
+            className={`bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center shadow ${!canCreate ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={() => canCreate && setShowMenu((prev) => !prev)}
             aria-label="Crear shot"
-            disabled={!user || user?.role === 'subscriber'}
+            disabled={!canCreate} // NUEVO: Usamos la variable calculada
           >
             +
           </button>
-          {user?.role === 'subscriber' && (
+          {/* NUEVO: Mostrar tooltip si tiene usuario pero NO tiene permiso */}
+          {!canCreate && user && (
             <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2 py-1 bg-black text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200" style={{ whiteSpace: 'nowrap' }}>
               Solo para Miembros
             </span>
@@ -44,7 +48,7 @@ export default function Footer() {
         </div>
         {showMenu && (
           <div id="footer-menu-dropdown" className="absolute bottom-10 right-0 flex flex-col items-end gap-2 z-50">
-            <button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center shadow" aria-label="Subir archivo" onClick={() => { /* window.location.href = process.env.NEXT_PUBLIC_BASE_URL + "/upload"; */ setModalSection(1); setShowMenu(false); }}>
+            <button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center shadow" aria-label="Subir archivo" onClick={() => { setModalSection(1); setShowMenu(false); }}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 10l-4-4m0 0l-4 4m4-4v12" /></svg>
             </button>
             <button className="bg-green-500 hover:bg-green-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center shadow" aria-label="Subir carpeta" onClick={() => { setModalSection(2); setShowMenu(false); }}>

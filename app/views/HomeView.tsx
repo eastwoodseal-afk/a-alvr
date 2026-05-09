@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import MasonryGrid from "../components/MasonryGrid";
 import ShotDetailModal from "../components/ShotDetailModal";
 import UserProfileOverlay from "../components/UserProfileOverlay";
@@ -11,134 +11,89 @@ import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
 const BATCH_SIZE = 20;
 
 interface Shot {
-  id: string; 
-  image_url: string;
-  title?: string;
-  description?: string;
-  username?: string;
-  user_id?: string;
-  author?: string;
-  likes_count?: number;
-  views_count?: number;
-}
-
-interface UserRelation {
-  id: string;
-  username: string;
-  avatar_url?: string;
-  hasSharedStudio: boolean;
+  id: string; image_url: string; title?: string; description?: string; username?: string; user_id?: string; author?: string; likes_count?: number; views_count?: number;
 }
 
 export default function HomeView() {
-  const { user, followingOnly } = useAuth();
+  const { user } = useAuth(); 
   const [shots, setShots] = useState<Shot[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
-  
   const [savedShots, setSavedShots] = useState<string[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [likedShots, setLikedShots] = useState<string[]>([]);
   const [likingId, setLikingId] = useState<string | null>(null);
-
-  const [relatedUsers, setRelatedUsers] = useState<UserRelation[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'public' | 'studio'>('public');
-  
   const [confirmDisapproveId, setConfirmDisapproveId] = useState<string | null>(null);
   const [disapprovingId, setDisapprovingId] = useState<string | null>(null);
 
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
-  const gridColumnsClass = followingOnly 
-    ? "columns-1 md:columns-3 lg:columns-4 xl:columns-6" 
-    : "columns-2 md:columns-3 lg:columns-4 xl:columns-6";
+  const gridColumnsClass = "columns-2 md:columns-3 lg:columns-4 xl:columns-6";
+
+  // NUEVO: Candado de seguridad y Freno de Emergencia
+  const isFetchingRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchShots = useCallback(async (pageNum: number, isRefresh = false) => {
-    if (loading) return; setLoading(true);
-    const start = pageNum * BATCH_SIZE; const end = start + BATCH_SIZE - 1;
-    let query = supabase.from("shots").select("id, image_url, title, description, user_id, author, likes_count, views_count").eq("is_approved", true);
-    if (followingOnly && user) {
-        const { data: followingData } = await supabase.from('follows').select('following_id').eq('follower_id', user.id);
-        const followingIds = followingData?.map(f => f.following_id) || [];
-        if (followingIds.length === 0) { setShots([]); setHasMore(false); setLoading(false); return; }
-        query = query.in('user_id', followingIds);
+    if (isFetchingRef.current) return; 
+    
+    isFetchingRef.current = true;
+    setLoading(true);
+
+    // NUEVO: Creamos un nuevo freno para esta petición
+    abortControllerRef.current = new AbortController();
+    const { signal } = abortControllerRef.current;
+
+    try {
+        const start = pageNum * BATCH_SIZE; 
+        const end = start + BATCH_SIZE - 1;
+        
+        let query = supabase.from("shots").select("id, image_url, title, description, user_id, author, likes_count, views_count").eq("is_approved", true);
+        query = query.order('created_at', { ascending: false }).order('id', { ascending: false }).range(start, end);
+        
+        // NUEVO: Le pasamos el freno a Supabase. Si se acciona, la petición se cancela.
+        query = query.abortSignal(signal);
+        
+        const { data, error } = await query;
+        
+        // Si fue cancelada a propósito, salimos sin hacer nada
+        if (error && error.name === 'AbortError') {
+          return;
+        }
+
+        if (error) throw error;
+        if (data) {
+          let newShots = data.map(s => ({...s, id: s.id.toString()}));
+          if (!user && newShots.length > 0) newShots.sort(() => Math.random() - 0.5);
+          
+          const userIds = [...new Set(newShots.map((shot) => shot.user_id).filter(Boolean))];
+          let profilesMap: Record<string, string> = {};
+          if (userIds.length) {
+            const { data: profiles } = await supabase.from("profiles").select("id, username").in("id", userIds);
+            if (profiles) profilesMap = profiles.reduce((acc: Record<string, string>, p) => { acc[p.id] = p.username || "sin Creador"; return acc; }, {} as Record<string, string>);
+          }
+          const processedShots = newShots.map((s) => ({ ...s, views_count: s.views_count || 0, username: profilesMap[s.user_id] || "sin Creador" }));
+          
+          if (isRefresh || pageNum === 0) setShots(processedShots);
+          else setShots((prev) => [...prev, ...processedShots]);
+          if (data.length < BATCH_SIZE) setHasMore(false);
+        } else setHasMore(false);
+    } catch (err: any) { 
+      if (err.name === 'AbortError') return; // Cancelada, no hay problema
+      console.error(err); 
+      setHasMore(false); 
+    } finally { 
+      isFetchingRef.current = false; // Liberamos el candado
+      setLoading(false); // LIBERAMOS LA UI (Esto evita el "Cargando..." eterno)
     }
-    query = query.order('created_at', { ascending: false }).range(start, end);
-    const { data, error } = await query;
-    if (error) { console.error(error); setLoading(false); return; }
-    if (data) {
-      let newShots = data.map(s => ({...s, id: s.id.toString()}));
-      if (!user && !followingOnly && newShots.length > 0) newShots.sort(() => Math.random() - 0.5);
-      const userIds = [...new Set(newShots.map((shot) => shot.user_id).filter(Boolean))];
-      let profilesMap: Record<string, string> = {};
-      if (userIds.length) {
-        const { data: profiles } = await supabase.from("profiles").select("id, username").in("id", userIds);
-        if (profiles) profilesMap = profiles.reduce((acc: Record<string, string>, p) => { acc[p.id] = p.username || "sin Creador"; return acc; }, {} as Record<string, string>);
-      }
-      const processedShots = newShots.map((s) => ({ ...s, views_count: s.views_count || 0, username: profilesMap[s.user_id] || "sin Creador" }));
-      if (isRefresh) setShots(processedShots); else setShots((prev) => [...prev, ...processedShots]);
-      if (data.length < BATCH_SIZE) setHasMore(false);
-    } else setHasMore(false);
-    setLoading(false);
-  }, [user, loading, followingOnly]);
-
-  useEffect(() => {
-    if (followingOnly && user) {
-        const fetchRelatedUsers = async () => {
-            const { data: followsData } = await supabase
-                .from('follows')
-                .select('profiles!follows_following_id_fkey(id, username, avatar_url)')
-                .eq('follower_id', user.id);
-            
-            const followingUsers = (followsData || []).map((f: any) => ({
-                id: f.profiles.id,
-                username: f.profiles.username,
-                avatar_url: f.profiles.avatar_url,
-                hasSharedStudio: false
-            }));
-
-            const { data: sharesData } = await supabase
-                .from('studio_shares')
-                .select('owner_id, profiles!studio_shares_owner_id_fkey(id, username, avatar_url)')
-                .eq('viewer_id', user.id);
-
-            const studioUsers = (sharesData || []).map((s: any) => ({
-                id: s.profiles.id,
-                username: s.profiles.username,
-                avatar_url: s.profiles.avatar_url,
-                hasSharedStudio: true
-            }));
-
-            const userMap = new Map<string, UserRelation>();
-            
-            followingUsers.forEach(u => userMap.set(u.id, u));
-            
-            studioUsers.forEach(u => {
-                if (userMap.has(u.id)) {
-                    const existing = userMap.get(u.id)!;
-                    existing.hasSharedStudio = true;
-                } else {
-                    userMap.set(u.id, u);
-                }
-            });
-
-            setRelatedUsers(Array.from(userMap.values()));
-        };
-        fetchRelatedUsers();
-    } else {
-        setRelatedUsers([]);
-    }
-  }, [followingOnly, user]);
+  }, [user?.id]);
 
   useEffect(() => { 
-    setShots([]); 
-    setPage(0); 
-    setHasMore(true); 
     fetchShots(0, true); 
-    
     async function fetchUserInteractions() {
-      if (!user) return;
+      if (!user?.id) return;
       const [savedRes, likedRes] = await Promise.all([
         supabase.from("saved_shots").select("shot_id").eq("user_id", user.id),
         supabase.from("likes").select("shot_id").eq("user_id", user.id)
@@ -147,183 +102,77 @@ export default function HomeView() {
       if (likedRes.data) setLikedShots(likedRes.data.map((l: any) => l.shot_id.toString()));
     }
     fetchUserInteractions();
-  }, [user, followingOnly]);
+  }, [user?.id]);
+
+  // LEY 3.3: FRENO DE EMERGENCIA. Si el usuario se va a otra pestaña 
+  // y hay una petición en curso, la cancelamos para que la UI no se quede trabada.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort(); // ¡PISAR EL FRENO!
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  const handleSave = useCallback(async (shotId: string) => { 
+    if (!user) return; 
+    setSavingId(shotId); 
+    await supabase.from("saved_shots").insert({ user_id: user.id, shot_id: shotId }); 
+    setSavedShots(prev => [...prev, shotId]); 
+    setSavingId(null); 
+  }, [user?.id]);
+
+  const handleLike = useCallback(async (shotId: string) => { 
+    if (!user) return; 
+    const alreadyLiked = likedShots.includes(shotId); 
+    setLikingId(shotId); 
+    setShots(prev => prev.map(s => { if(s.id === shotId) return { ...s, likes_count: (s.likes_count || 0) + (alreadyLiked ? -1 : 1) }; return s; })); 
+    if (alreadyLiked) { 
+      setLikedShots(prev => prev.filter(id => id !== shotId)); 
+      await supabase.from("likes").delete().match({ user_id: user.id, shot_id: shotId }); 
+    } else { 
+      setLikedShots(prev => [...prev, shotId]); 
+      await supabase.from("likes").insert({ user_id: user.id, shot_id: shotId }); 
+    } 
+    setLikingId(null); 
+  }, [user?.id, likedShots]);
   
-  const handleSave = async (shotId: string) => {
-    if (!user) return;
-    setSavingId(shotId);
-    await supabase.from("saved_shots").insert({ user_id: user.id, shot_id: shotId });
-    setSavedShots(prev => [...prev, shotId]);
-    setSavingId(null);
-  };
-
-  const handleLike = async (shotId: string) => {
-    if (!user) return;
-    const alreadyLiked = likedShots.includes(shotId);
-    setLikingId(shotId);
-    
-    setShots(prev => prev.map(s => {
-      if(s.id === shotId) return { ...s, likes_count: (s.likes_count || 0) + (alreadyLiked ? -1 : 1) };
-      return s;
-    }));
-
-    if (alreadyLiked) {
-        setLikedShots(prev => prev.filter(id => id !== shotId));
-        await supabase.from("likes").delete().match({ user_id: user.id, shot_id: shotId });
-    } else {
-        setLikedShots(prev => [...prev, shotId]);
-        await supabase.from("likes").insert({ user_id: user.id, shot_id: shotId });
-    }
-    setLikingId(null);
-  };
-
-  const handleView = async (shotId: string) => {
+  const handleView = useCallback(async (shotId: string) => { 
     await supabase.rpc('increment_view', { shot_id: parseInt(shotId) });
-  };
+    setShots(prev => prev.map(s => { if(s.id === shotId) return { ...s, views_count: (s.views_count || 0) + 1 }; return s; }));
+  }, []);
 
   const handleDisapproveRequest = (shotId: string) => { if (!isAdmin) return; setConfirmDisapproveId(shotId); };
+  const executeDisapprove = async () => { if (!confirmDisapproveId) return; setDisapprovingId(confirmDisapproveId); try { const { error } = await supabase.from('shots').update({ is_approved: false }).eq('id', confirmDisapproveId); if (!error) setShots(prev => prev.filter(s => s.id !== confirmDisapproveId)); } catch (err) {} finally { setDisapprovingId(null); setConfirmDisapproveId(null); } };
   
-  const executeDisapprove = async () => {
-    if (!confirmDisapproveId) return;
-    setDisapprovingId(confirmDisapproveId);
-    const { error } = await supabase.from('shots').update({ is_approved: false }).eq('id', confirmDisapproveId);
-    if (!error) setShots(prev => prev.filter(s => s.id !== confirmDisapproveId));
-    setDisapprovingId(null);
-    setConfirmDisapproveId(null);
-  };
-  
-  const openProfile = (userId: string, mode: 'public' | 'studio' = 'public') => {
-    setSelectedProfileId(userId);
-    setViewMode(mode);
-  };
-
-  const loadMore = useCallback(() => {
+  const loadMore = useCallback(() => { 
     if (hasMore && !loading) { 
       const nextPage = page + 1; 
       setPage(nextPage); 
       fetchShots(nextPage); 
-    }
+    } 
   }, [page, hasMore, loading, fetchShots]);
-
-  useInfiniteScroll(loadMore, loading);
+  
+  const sentinelRef = useInfiniteScroll(loadMore, loading);
 
   return (
-    <section className={`flex w-full ${followingOnly ? 'h-[calc(100vh-64px)]' : ''}`}>
-      
-      {/* --- SIDEBAR RELACIONES (LAYOUT VERTICAL) --- */}
-      {followingOnly && (
-        <aside className="w-1/4 min-w-[80px] max-w-[160px] flex-shrink-0 border-r border-gray-800 bg-gray-900/50 overflow-y-auto pt-20 pb-4">
-            <div className="px-2 mb-2">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider text-left pl-1">RELACIONES</h3>
-            </div>
-            <div className="space-y-1 px-1">
-                {relatedUsers.length === 0 && (
-                    <div className="text-center text-gray-600 text-xs p-4">Vacío</div>
-                )}
-                {relatedUsers.map((u) => (
-                    // CONTENEDOR FLEX COL
-                    <div key={u.id} className="w-full flex flex-col items-center gap-1 p-1">
-                        
-                        {/* FILA SUPERIOR: Avatar + Botón Estudio */}
-                        <div className="w-full flex items-center justify-center gap-1">
-                            
-                            {/* BOTÓN PERFIL (Avatar) */}
-                            <button 
-                                onClick={() => openProfile(u.id, 'public')} 
-                                className="flex flex-col items-center hover:opacity-80 transition"
-                            >
-                                <div className="w-7 h-7 rounded-full bg-gray-700 overflow-hidden flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white border border-gray-600">
-                                    {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover"/> : (u.username || "?").charAt(0).toUpperCase()}
-                                </div>
-                            </button>
-
-                            {/* BOTÓN ESTUDIO (28px) */}
-                            {u.hasSharedStudio && (
-                                <button 
-                                    onClick={() => openProfile(u.id, 'studio')}
-                                    className="bg-blue-600 rounded-full w-[28px] h-[28px] flex items-center justify-center shadow hover:bg-blue-500 transition flex-shrink-0"
-                                    title="Ver Estudio Compartido"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 text-white">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" />
-                                    </svg>
-                                </button>
-                            )}
-                        </div>
-
-                        {/* NOMBRE (Debajo del avatar) */}
-                        <button 
-                            onClick={() => openProfile(u.id, 'public')} 
-                            className="w-full text-center hover:opacity-80 transition"
-                        >
-                            <span className="text-[10px] text-gray-400 truncate block px-1">@{u.username}</span>
-                        </button>
-                        
-                    </div>
-                ))}
-            </div>
-        </aside>
-      )}
-
-      <div className={`flex-1 p-2 overflow-y-auto ${followingOnly ? 'h-full' : ''}`}>
+    <section className="flex w-full">
+      <div className="flex-1 p-2 overflow-y-auto">
         {loading && shots.length === 0 && <div className="text-center py-8 text-gray-400">Cargando Ateneo...</div>}
-        
-        {shots.length > 0 && (
-          <MasonryGrid 
-            shots={shots} 
-            setSelectedShot={setSelectedShot} 
-            savedShots={savedShots}
-            savingId={savingId} 
-            onSaveShot={handleSave} 
-            user={user}
-            likedShots={likedShots} 
-            likingId={likingId} 
-            onLike={handleLike}
-            columnsClass={gridColumnsClass}
-            isAdmin={isAdmin} 
-            onDisapprove={handleDisapproveRequest} 
-            disapprovingId={disapprovingId}
-          />
-        )}
-        
+        {shots.length > 0 && ( <MasonryGrid shots={shots} setSelectedShot={setSelectedShot} savedShots={savedShots} savingId={savingId} onSaveShot={handleSave} user={user} likedShots={likedShots} likingId={likingId} onLike={handleLike} columnsClass={gridColumnsClass} isAdmin={isAdmin} onDisapprove={handleDisapproveRequest} disapprovingId={disapprovingId}/> )}
         {loading && shots.length > 0 && <div className="text-center py-4 text-gray-500">Cargando más...</div>}
         {!hasMore && !loading && shots.length > 0 && <div className="text-center py-4 text-gray-600 text-sm">Fin del Ateneo.</div>}
+
+        <div ref={sentinelRef} className="h-1 w-full"></div>
       </div>
 
-      {/* Modales */}
-      {selectedShot && (
-        <ShotDetailModal 
-          shot={selectedShot}
-          onClose={() => setSelectedShot(null)}
-          isSaved={savedShots.includes(selectedShot.id)}
-          isSaving={savingId === selectedShot.id}
-          onSave={() => handleSave(selectedShot.id)}
-          user={user}
-          isLiked={likedShots.includes(selectedShot.id)}
-          likesCount={selectedShot.likes_count || 0}
-          onLike={() => handleLike(selectedShot.id)}
-          viewsCount={selectedShot.views_count || 0}
-          onView={handleView}
-        />
-      )}
-
-      {selectedProfileId && (
-        <UserProfileOverlay 
-          userId={selectedProfileId}
-          onClose={() => setSelectedProfileId(null)}
-          studioMode={viewMode === 'studio'}
-        />
-      )}
-
-      <ConfirmModal 
-        open={!!confirmDisapproveId}
-        onClose={() => setConfirmDisapproveId(null)}
-        onConfirm={executeDisapprove}
-        title="Desaprobar"
-        message="¿Ocultar este shot?"
-        confirmText="Sí"
-        variant="danger"
-      />
+      {selectedShot && ( <ShotDetailModal shot={selectedShot} onClose={() => setSelectedShot(null)} isSaved={savedShots.includes(selectedShot.id)} isSaving={savingId === selectedShot.id} onSave={() => handleSave(selectedShot.id)} user={user} isLiked={likedShots.includes(selectedShot.id)} likesCount={selectedShot.likes_count || 0} onLike={() => handleLike(selectedShot.id)} viewsCount={selectedShot.views_count || 0} onView={handleView}/> )}
+      {selectedProfileId && ( <UserProfileOverlay userId={selectedProfileId} onClose={() => setSelectedProfileId(null)} /> )}
+      <ConfirmModal open={!!confirmDisapproveId} onClose={() => setConfirmDisapproveId(null)} onConfirm={executeDisapprove} title="Desaprobar" message="¿Ocultar este shot?" confirmText="Sí" variant="danger"/>
     </section>
   );
 }

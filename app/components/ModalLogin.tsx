@@ -82,6 +82,11 @@ export default function ModalLogin({ open, onClose }: { open: boolean; onClose: 
                 <label className="block mb-1 text-sm font-medium text-gray-900">Email</label>
                 <input
                   type="email"
+                  // ATRIBUTOS CLAVE PARA AUTOCOMPLETADO:
+                  name="email"
+                  id="email"
+                  autoComplete="email"
+                  // ---------------------------------
                   className="w-full px-4 py-2 rounded-lg bg-gray-100 border border-gray-300 text-gray-900 focus:outline-none focus:ring-2 focus:ring-yellow-500"
                   required
                   value={email}
@@ -93,6 +98,11 @@ export default function ModalLogin({ open, onClose }: { open: boolean; onClose: 
                 <label className="block mb-1 text-sm font-medium text-gray-900">Contraseña</label>
                 <input
                   type="password"
+                  // ATRIBUTOS CLAVE PARA AUTOCOMPLETADO:
+                  name="password"
+                  id="password"
+                  autoComplete="current-password"
+                  // ---------------------------------
                   className="w-full px-4 py-2 rounded-lg bg-gray-100 border border-gray-300 text-gray-900 focus:outline-none focus:ring-2 focus:ring-yellow-500"
                   required
                   value={password}
@@ -117,8 +127,6 @@ export default function ModalLogin({ open, onClose }: { open: boolean; onClose: 
                 setLoading(true);
                 setError("");
                 try {
-                  // --- CORRECCIÓN: Redirección dinámica ---
-                  // Usamos window.location.origin para que funcione en Localhost y en Vercel
                   const { error } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
@@ -130,9 +138,6 @@ export default function ModalLogin({ open, onClose }: { open: boolean; onClose: 
                     setError(error.message);
                     setLoading(false);
                   }
-                  // NOTA: El código que seguía aquí (getUser, check username) ha sido eliminado
-                  // porque el navegador abandona la página para ir a Google.
-                  // La lógica de verificar username ahora la hace AuthContext.tsx al regresar.
                   
                 } catch (err) {
                   console.error("Error inesperado:", err);
@@ -160,31 +165,11 @@ export default function ModalLogin({ open, onClose }: { open: boolean; onClose: 
               password: passwordValue,
               options: { data: { username: usernameValue } }
             });
-            // Lógica original del Superadmin (Se mantiene intacta como respaldo)
-            if (data?.user && emailValue === 'eastwood.seal@gmail.com') {
-              setTimeout(async () => {
-                if (data.user) {
-                  await supabase
-                    .from('profiles')
-                    .update({ 
-                      role: 'superadmin',
-                      promoted_by: data.user.id,
-                      promoted_at: new Date().toISOString()
-                    })
-                    .eq('id', data.user.id);
-                  await supabase
-                    .from('role_promotions')
-                    .insert({
-                      user_id: data.user.id,
-                      promoted_by: data.user.id,
-                      old_role: 'subscriber',
-                      new_role: 'superadmin',
-                      notes: 'Initial superadmin setup',
-                      created_at: new Date().toISOString(),
-                    });
-                }
-              }, 2000);
-            }
+
+            // --- CÓDIGO ELIMINADO: Redundancia de Superadmin ---
+            // El Trigger en Supabase (handle_new_user) ahora maneja esto automáticamente.
+            // ----------------------------------------------------
+
             setLoading(false);
             if (error) {
               setError(error.message);

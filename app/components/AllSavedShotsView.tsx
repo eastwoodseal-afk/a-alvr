@@ -22,7 +22,6 @@ interface Shot {
   views_count?: number;
 }
 
-// --- FIX: Permitir null y undefined ---
 interface Props {
   userId: string | null | undefined;
 }
@@ -39,7 +38,6 @@ export default function AllSavedShotsView({ userId }: Props) {
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const fetchShots = useCallback(async (pageNum: number) => {
-    // Si no hay userId, no hacemos nada
     if (!userId || loading) return; 
     
     setLoading(true);
@@ -109,20 +107,22 @@ export default function AllSavedShotsView({ userId }: Props) {
     if (userId) fetchShots(0); 
   }, [userId]);
 
+  // NUEVO: Usamos el nuevo hook con centinela
   const loadMore = useCallback(() => {
     if (hasMore && !loading) { const nextPage = page + 1; setPage(nextPage); fetchShots(nextPage); }
   }, [page, hasMore, loading, fetchShots]);
   
-  useInfiniteScroll(loadMore, loading);
+  const sentinelRef = useInfiniteScroll(loadMore, loading);
 
+    // LEY 1.2: Desacoplamiento de identidad. Solo depende del ID, no del objeto completo.
   useEffect(() => {
     async function fetchSaved() {
-      if (!user) return;
+      if (!user?.id) return; // Verificamos el ID de forma segura
       const { data } = await supabase.from("saved_shots").select("shot_id").eq("user_id", user.id);
       if (data) setSavedShots(data.map((r: any) => r.shot_id));
     }
     fetchSaved();
-  }, [user]);
+  }, [user?.id]); // 👈 CAMBIO CONSTITUCIONAL
 
   const handleSave = async (id: string) => {
       if(!user) return;
@@ -132,7 +132,6 @@ export default function AllSavedShotsView({ userId }: Props) {
       setSavingId(null);
   };
 
-  // Guardia extra si no hay userId
   if (!userId) return <div className="text-center py-8 text-gray-400">No hay usuario logueado.</div>;
 
   return (
@@ -154,6 +153,9 @@ export default function AllSavedShotsView({ userId }: Props) {
         {loading && shots.length > 0 && <div className="text-center py-4 text-gray-500">Cargando más...</div>}
         {!hasMore && !loading && shots.length > 0 && <div className="text-center py-4 text-gray-600 text-sm">Fin de tu colección.</div>}
 
+        {/* NUEVO: El centinela invisible para el Infinite Scroll */}
+        <div ref={sentinelRef} className="h-1 w-full"></div>
+
         {selectedShot && (
             <ShotDetailModal 
                 shot={selectedShot}
@@ -166,7 +168,7 @@ export default function AllSavedShotsView({ userId }: Props) {
                 likesCount={0}
                 onLike={() => {}}
                 viewsCount={selectedShot.views_count || 0}
-                onView={() => {}} // Aquí podrías pasar una función si quieres actualizar conteo
+                onView={() => {}}
             />
         )}
     </>

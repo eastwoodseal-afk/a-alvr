@@ -4,85 +4,122 @@ import { supabase } from "./supabaseClient";
 import { UserWithRole } from "./roleUtils";
 import { User } from "@supabase/supabase-js";
 
-// Añadimos followingOnly al tipo del contexto
 const AuthContext = createContext<{ 
   user: UserWithRole | null, 
   loading: boolean,
-  followingOnly: boolean, // NUEVO
-  toggleFollowingFilter: () => void // NUEVO
+  followingOnly: boolean,
+  toggleFollowingFilter: () => void,
+  updateUserContext: (updates: Partial<UserWithRole>) => void
 }>({ 
   user: null, 
   loading: true,
   followingOnly: false,
-  toggleFollowingFilter: () => {} 
+  toggleFollowingFilter: () => {},
+  updateUserContext: () => {}
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserWithRole | null>(null);
   const [loading, setLoading] = useState(true);
-  
-  // --- NUEVO: ESTADO DEL FILTRO ---
   const [followingOnly, setFollowingOnly] = useState(false);
 
-  const toggleFollowingFilter = () => {
-    setFollowingOnly(prev => !prev);
-  };
-  // -------------------------------
+  const toggleFollowingFilter = () => setFollowingOnly(prev => !prev);
 
-  useEffect(() => {
-    const fetchProfileAndSetAdmin = async (supabaseUser: User) => {
+  const updateUserContext = (updates: Partial<UserWithRole>) => {
+    setUser(prev => prev ? { ...prev, ...updates } : null);
+  };
+
+  const fetchProfileAndSetAdmin = async (supabaseUser: User) => {
+    try {
       const userId = supabaseUser.id;
       const userEmail = supabaseUser.email;
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      if (error) throw error;
 
       const googleAvatar = supabaseUser.user_metadata?.avatar_url;
       let avatarUrl = profile?.avatar_url || googleAvatar || null;
-
       if (profile && !profile.avatar_url && googleAvatar) {
-         await supabase.from('profiles').update({ avatar_url: googleAvatar }).eq('id', userId);
-         avatarUrl = googleAvatar; 
+           await supabase.from('profiles').update({ avatar_url: googleAvatar }).eq('id', userId);
+           avatarUrl = googleAvatar; 
+      }
+
+      if (profile && userEmail === 'eastwood.seal@gmail.com' && profile.role !== 'superadmin') {
+          await supabase.from('profiles').update({ role: 'superadmin', promoted_by: userId, promoted_at: new Date().toISOString() }).eq('id', userId);
+          try { await supabase.from('role_promotions').insert({ user_id: userId, promoted_by: userId, old_role: profile.role || 'subscriber', new_role: 'superadmin', notes: 'Auto-verified' }); } catch (e) {}
+          profile.role = 'superadmin';
       }
 
       if (profile) {
-        if (userEmail === 'eastwood.seal@gmail.com') {
-          await supabase.from('profiles').update({ role: 'superadmin', promoted_by: userId, promoted_at: new Date().toISOString() }).eq('id', userId);
-          try {
-            await supabase.from('role_promotions').insert({ user_id: userId, promoted_by: userId, old_role: profile.role || 'subscriber', new_role: 'superadmin', notes: 'Auto-verified by AuthContext', created_at: new Date().toISOString() });
-          } catch (err) { console.warn("Log de promoción omitido."); }
-          profile.role = 'superadmin';
-        }
+        const newUserData = { id: profile.id, email: userEmail ?? "", username: profile.username, role: profile.role, created_at: profile.created_at, promoted_by: profile.promoted_by, promoted_at: profile.promoted_at, avatar_url: avatarUrl };
+        
+        // CORTAFUEGOS CONSTITUCIONAL
+        setUser(prev => {
+          if (prev && prev.id === newUserData.id && prev.username === newUserData.username && prev.role === newUserData.role && prev.avatar_url === newUserData.avatar_url) {
+            return prev; 
+          }
+          return newUserData; 
+        });
 
-        setUser({ id: profile.id, email: userEmail ?? "", username: profile.username, role: profile.role, created_at: profile.created_at, promoted_by: profile.promoted_by, promoted_at: profile.promoted_at, avatar_url: avatarUrl });
-      }
-    };
+      } else { setUser(null); }
 
-    const getSession = async () => {
+    } catch (err) {
+      console.error("Error en fetchProfile:", err);
+      setUser(null);
+    }
+  };
+
+  const getSession = async () => {
+    try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) { await fetchProfileAndSetAdmin(session.user); } 
       else { setUser(null); }
-      setLoading(false);
+    } catch (err) { console.error(err); } 
+    finally { setLoading(false); }
+  };
+  getSession();
+
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      try {
+        if (session?.user) { 
+          await fetchProfileAndSetAdmin(session.user); 
+        } else { 
+          setUser(null); 
+        }
+      } catch (err) { 
+        console.error("Error en AuthStateChange:", err); 
+      } finally { 
+        setLoading(false); 
+      }
+  });
+
+  // LEY 3.3: ARRANQUE CON MEMORIA FOTOGRÁFICA
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        try {
+          // Intentamos una petición rápida de 3 segundos para ver si el motor responde
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000));
+          await Promise.race([supabase.auth.getSession(), timeoutPromise]);
+        } catch (err) {
+          // Si falla (el motor está en coma), tomamos foto del scroll y recargamos
+          console.warn("Conexión perdida al volver a la pestaña. Guardando scroll y recargando...");
+          const mainScroll = document.querySelector('main');
+          if (mainScroll) {
+            sessionStorage.setItem('aal_scroll_pos', mainScroll.scrollTop.toString());
+          }
+          window.location.reload();
+        }
+      }
     };
-    getSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) { await fetchProfileAndSetAdmin(session.user); } 
-      else { setUser(null); }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, followingOnly, toggleFollowingFilter }}>
+    <AuthContext.Provider value={{ user, loading, followingOnly, toggleFollowingFilter, updateUserContext }}>
       {children}
     </AuthContext.Provider>
   );
 }
-
 export const useAuth = () => useContext(AuthContext);

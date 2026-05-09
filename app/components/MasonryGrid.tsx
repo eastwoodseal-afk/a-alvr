@@ -40,7 +40,7 @@ export default function MasonryGrid({
 }: MasonryGridProps) {
   return (
     // CORRECCIÓN: Eliminado xl:w-screen xl:max-w-none
-    <div className={`${columnsClass} gap-2 w-full pt-20`}>
+    <div className={`${columnsClass} gap-2 w-full `}>
       {shots.map((shot) => (
         <ShotCard
           key={shot.id}

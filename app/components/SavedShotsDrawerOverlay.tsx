@@ -17,6 +17,10 @@ export default function SavedShotsDrawerOverlay({ userId, onClose, initialView =
     
     const [viewMode, setViewMode] = useState<string | null>(initialView);
 
+    // NUEVO: Estado maestro de selección y depósito
+    const [selectedShots, setSelectedShots] = useState<string[]>([]);
+    const [recentlyDeposited, setRecentlyDeposited] = useState<string[]>([]);
+
     // --- FETCH DATOS PERFIL PARA HEADER ---
     const [profileData, setProfileData] = useState<{username:string, avatar_url:string, followers_count:number, following_count:number} | null>(null);
 
@@ -32,12 +36,6 @@ export default function SavedShotsDrawerOverlay({ userId, onClose, initialView =
         }
     }, [userId]);
     // ---------------------------------------
-
-    function getSelectedShots() {
-      const el = document.getElementById("shots-selected-data");
-      if (!el) return [];
-      try { return JSON.parse(el.getAttribute("data-selected-shots") || "[]"); } catch { return []; }
-    }
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [boardName, setBoardName] = useState("");
@@ -110,19 +108,18 @@ export default function SavedShotsDrawerOverlay({ userId, onClose, initialView =
                 <button key={board.id} className={`w-24 py-1 px-1 rounded font-semibold text-left shadow transition disabled:opacity-50 text-sm ${filterBoardId === board.id ? 'bg-yellow-700 text-white' : 'bg-yellow-500 text-white hover:bg-yellow-600'}`}
                   disabled={depositing}
                   onClick={async () => {
-                    const shotIds = getSelectedShots();
-                    if (shotIds.length > 0) {
+                    // NUEVA LÓGICA: Usamos el estado de React, no el DOM
+                    if (selectedShots.length > 0) {
                       setDepositing(true); setDepositError(""); setDepositSuccess(false);
                       try {
                         if (!board.id) return;
-                        const inserts = shotIds.map((shot_id: string) => ({ board_id: board.id, shot_id }));
+                        const inserts = selectedShots.map((shot_id: string) => ({ board_id: board.id, shot_id }));
                         const { error } = await supabase.from("board_shots").insert(inserts);
                         if (error) { setDepositError("Error."); } 
                         else {
                           setDepositSuccess(true);
-                          const el = document.getElementById("shots-selected-data");
-                          if (el) el.setAttribute("data-selected-shots", "[]");
-                          window.dispatchEvent(new CustomEvent("shots-cleared", { detail: shotIds }));
+                          setRecentlyDeposited(selectedShots); // 1. Avisamos al hijo que los oculte
+                          setSelectedShots([]); // 2. Limpiamos la selección en el padre
                         }
                       } catch { setDepositError("Error."); }
                       setDepositing(false);
@@ -150,30 +147,21 @@ export default function SavedShotsDrawerOverlay({ userId, onClose, initialView =
           
           <div className="flex items-center gap-3">
             {viewMode === 'all' ? (
-                // --- VISTA "COLECCIÓN" ---
                 <>
-                    {/* 1. Título */}
                     <span className="text-xl font-bold text-yellow-400">Colección</span>
-                    
-                    {/* 2. Bloque Usuario (Nombre + Seguidores) */}
                     <div className="flex flex-col justify-center border-l border-gray-600 pl-3">
                         <span className="text-base text-white font-bold leading-tight">{profileData?.username || "Usuario"}</span>
                         <span className="text-xs text-gray-400">{profileData?.followers_count ?? 0} seguidores</span>
                     </div>
-
-                    {/* 3. Avatar */}
                     <div className="w-9 h-9 rounded-full bg-gray-700 overflow-hidden flex items-center justify-center text-sm font-bold text-white border border-gray-600">
                        {profileData?.avatar_url ? <img src={profileData.avatar_url} className="w-full h-full object-cover" alt="Avatar" /> : (profileData?.username || "?").charAt(0).toUpperCase()}
                     </div>
-
-                    {/* 4. Bloque "Siguiendo a" */}
                     <div className="border-l border-gray-600 pl-3 flex items-center gap-1.5">
                         <span className="text-xs text-gray-400">Siguiendo a</span>
                         <span className="text-sm text-white font-bold">{profileData?.following_count ?? 0}</span>
                     </div>
                 </>
             ) : (
-                // --- VISTA NORMAL (SHOTS GUARDADOS) ---
                 <>
                     <button 
                         className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-[28px] h-[28px] flex items-center justify-center text-xl font-bold shadow mr-2" 
@@ -201,13 +189,11 @@ export default function SavedShotsDrawerOverlay({ userId, onClose, initialView =
              <AllSavedShotsView userId={userId} />
           ) : (
              <React.Suspense fallback={<div className="text-gray-400 py-8">Cargando...</div>}>
-              {(() => {
-                const el = typeof document !== 'undefined' ? document.getElementById("shots-selected-data") : null;
-                let selected = [];
-                try { selected = el ? JSON.parse(el.getAttribute("data-selected-shots") || "[]") : []; } catch {}
-                if (filterBoardId && selected.length === 0) { return <SavedShots userId={userId} filterBoardId={filterBoardId} />; }
-                return <SavedShots userId={userId} />;
-              })()}
+              {filterBoardId && selectedShots.length === 0 ? ( 
+                <SavedShots userId={userId} filterBoardId={filterBoardId} selectedShots={selectedShots} onSelectedShotsChange={setSelectedShots} recentlyDeposited={recentlyDeposited} /> 
+              ) : ( 
+                <SavedShots userId={userId} selectedShots={selectedShots} onSelectedShotsChange={setSelectedShots} recentlyDeposited={recentlyDeposited} /> 
+              )}
             </React.Suspense>
           )}
 

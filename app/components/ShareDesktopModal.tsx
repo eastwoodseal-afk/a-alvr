@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import { useAuth } from "../../lib/AuthContext"; // NUEVO: Importar useAuth
+import { useAuth } from "../../lib/AuthContext"; // NUEVO: Necesitamos saber quién es el dueño
 
 interface Props {
   open: boolean;
@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function ShareDesktopModal({ open, onClose }: Props) {
-  const { user } = useAuth(); // NUEVO: Obtener usuario actual
+  const { user } = useAuth(); // NUEVO: Obtenemos el dueño
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
@@ -32,15 +32,15 @@ export default function ShareDesktopModal({ open, onClose }: Props) {
 
   const handleShare = async (viewerId: string, viewerUsername: string) => {
     if (!user) return; // Seguro
-
-    // CORRECCIÓN: Añadimos owner_id: user.id
+    
+    // CORRECCIÓN CRÍTICA: Añadimos owner_id
     const { error } = await supabase.from('studio_shares').insert({ 
-      owner_id: user.id, // QUIEN comparte (Tú)
-      viewer_id: viewerId // A QUIEN se le comparte
+      owner_id: user.id, // NUEVO: El dueño soy yo
+      viewer_id: viewerId // La persona con quien comparto
     });
     
     if (error) {
-        if (error.code === '23505') {
+        if (error.code === '23505') { // Error de duplicado
             alert("Ya has compartido tu estudio con este usuario.");
         } else {
             console.error(error);

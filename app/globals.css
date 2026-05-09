@@ -1,4 +1,6 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* Custom scrollbar for ShotDetailModal */
 .custom-scrollbar::-webkit-scrollbar {
@@ -19,16 +21,10 @@
   --foreground: #171717;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
+    /* Unificamos con el 'bg-black' de Tailwind usado en layout */
+    --background: #000000; 
     --foreground: #ededed;
   }
 }
@@ -36,5 +32,6 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Fuente limpia y segura (System Stack) - Reemplaza a Geist/Arial */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
 }

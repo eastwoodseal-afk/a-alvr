@@ -19,24 +19,22 @@ export default function RootLayout({
       <head>
         <link href="https://fonts.googleapis.com/css2?family=Linux+Libertine:wght@400;700&display=swap" rel="stylesheet" />
       </head>
-      <body className="flex flex-col min-h-screen bg-zinc-50 dark:bg-black">
+      {/* Body oscuro y flexible */}
+      <body className="bg-black text-white flex flex-col min-h-screen">
         <AuthProvider>
           <Header />
-          <main className="flex-1 w-full overflow-y-auto p-0" style={{ paddingBottom: '80px' }}>
+          {/* 
+            main: 
+            - flex-1: Ocupa el espacio disponible.
+            - pt-14: Respeta la altura del Header.
+            - pb-16: Respeta la altura del Footer.
+            - overflow-y-auto: El scroll ocurre AQUI, no en el body.
+          */}
+          <main className="flex-1 w-full overflow-y-auto pt-14 pb-16">
             {children}
           </main>
           <Footer />
         </AuthProvider>
-        {/* Footer fijo */}
-        <style>{`
-          footer {
-            position: fixed;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 50;
-          }
-        `}</style>
       </body>
     </html>
   );

@@ -1,40 +1,49 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import SavedShotsDrawerOverlayEventListener from "./SavedShotsDrawerOverlayEventListener";
 import { useAuth } from "../../lib/AuthContext";
 
 interface SavedShotsProps {
   userId: string | null | undefined;
   filterBoardId?: string;
+  selectedShots: string[]; // NUEVO: Viene del padre
+  onSelectedShotsChange: (shots: string[]) => void; // NUEVO: Teléfono al padre
+  recentlyDeposited: string[]; // NUEVO: Para ocultar los depositados
 }
 
-export default function SavedShots({ userId, filterBoardId }: SavedShotsProps) {
+export default function SavedShots({ userId, filterBoardId, selectedShots, onSelectedShotsChange, recentlyDeposited }: SavedShotsProps) {
   const { user: currentUser } = useAuth();
   const [selectedShot, setSelectedShot] = useState<any | null>(null);
   const [shots, setShots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedShots, setSelectedShots] = useState<string[]>([]);
   const [hiddenShots, setHiddenShots] = useState<string[]>([]);
   const [showActions, setShowActions] = useState(false);
+
+  // NUEVO: Cuando el padre deposita, ocultamos los shots visualmente
+  useEffect(() => {
+    if (recentlyDeposited.length > 0) {
+      setHiddenShots(prev => [...prev, ...recentlyDeposited]);
+    }
+  }, [recentlyDeposited]);
 
   // --- LÓGICA FOLLOW ---
   const [authorData, setAuthorData] = useState<{ followers_count: number, avatar_url?: string } | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
 
+    // LEY 1.2: Desacoplamiento de identidad. Solo depende del ID, no del objeto completo.
   useEffect(() => {
     if (selectedShot?.user_id) {
       supabase.from('profiles').select('followers_count, avatar_url').eq('id', selectedShot.user_id).single().then(({ data }) => {
         if (data) setAuthorData(data);
       });
-      if (currentUser) {
+      if (currentUser?.id) {
         supabase.from('follows').select('follower_id').eq('follower_id', currentUser.id).eq('following_id', selectedShot.user_id).maybeSingle().then(({ data }) => {
           setIsFollowing(!!data);
         });
       }
     }
-  }, [selectedShot, currentUser]);
+  }, [selectedShot, currentUser?.id]); // 👈 CAMBIO CONSTITUCIONAL
 
   const handleToggleFollow = async () => {
     if (!currentUser || !selectedShot?.user_id || followLoading) return;
@@ -122,7 +131,7 @@ export default function SavedShots({ userId, filterBoardId }: SavedShotsProps) {
   return (
     <>
       {/* GRID */}
-      <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-6 gap-2 w-full xl:w-screen xl:max-w-none">
+      <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-6 gap-2 w-full">
         {shots.map((item, idx) => {
           const shotId = item.shots?.id;
           if (filterBoardId) {
@@ -150,15 +159,15 @@ export default function SavedShots({ userId, filterBoardId }: SavedShotsProps) {
                  )}
               </div>
               {!filterBoardId && shotId && (
-                <input type="checkbox" className="absolute top-2 right-2 w-5 h-5 accent-yellow-500" checked={selectedShots.includes(shotId)} onChange={e => { if(!shotId) return; setSelectedShots(prev => e.target.checked ? [...prev, shotId] : prev.filter(id => id !== shotId)); }} onClick={e => e.stopPropagation()} />
+                // NUEVO: El checkbox usa la prop del padre
+                <input type="checkbox" className="absolute top-2 right-2 w-5 h-5 accent-yellow-500" checked={selectedShots.includes(shotId)} onChange={e => { if(!shotId) return; onSelectedShotsChange(e.target.checked ? [...selectedShots, shotId] : selectedShots.filter(id => id !== shotId)); }} onClick={e => e.stopPropagation()} />
               )}
             </div>
           );
         })}
       </div>
       
-      <div id="shots-selected-data" style={{ display: 'none' }} data-selected-shots={JSON.stringify(selectedShots)} />
-      <SavedShotsDrawerOverlayEventListener onClearSelection={ids => { setHiddenShots(prev => [...prev, ...ids]); setSelectedShots([]); }} />
+      {/* ELIMINADO: El div oculto y el EventListener Fantasma */}
       
       {/* MODAL */}
       {selectedShot && (
@@ -211,7 +220,6 @@ export default function SavedShots({ userId, filterBoardId }: SavedShotsProps) {
                       title={showActions ? "Cerrar edición" : "Editar"}
                     >
                         {showActions ? (
-    // Icono: Lápiz PROHIBIDO (Cerrar/Cancelar)
     <div className="relative w-7 h-7">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="w-7 h-7 absolute">
             <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
@@ -221,7 +229,6 @@ export default function SavedShots({ userId, filterBoardId }: SavedShotsProps) {
         </svg>
     </div>
 ) : (
-    // Icono: Lápiz (Abrir/Editar)
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
     </svg>
