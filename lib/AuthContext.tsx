@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (profile) {
         const newUserData = { id: profile.id, email: userEmail ?? "", username: profile.username, role: profile.role, created_at: profile.created_at, promoted_by: profile.promoted_by, promoted_at: profile.promoted_at, avatar_url: avatarUrl };
         
-        // CORTAFUEGOS CONSTITUCIONAL
+        // CORTAFUEGOS: Solo actualiza si cambió el dato real
         setUser(prev => {
           if (prev && prev.id === newUserData.id && prev.username === newUserData.username && prev.role === newUserData.role && prev.avatar_url === newUserData.avatar_url) {
             return prev; 
@@ -65,7 +65,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     } catch (err) {
       console.error("Error en fetchProfile:", err);
-      setUser(null);
     }
   };
 
@@ -92,29 +91,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false); 
       }
   });
-
-  // LEY 3.3: ARRANQUE CON MEMORIA FOTOGRÁFICA
-  useEffect(() => {
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
-        try {
-          // Intentamos una petición rápida de 3 segundos para ver si el motor responde
-          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000));
-          await Promise.race([supabase.auth.getSession(), timeoutPromise]);
-        } catch (err) {
-          // Si falla (el motor está en coma), tomamos foto del scroll y recargamos
-          console.warn("Conexión perdida al volver a la pestaña. Guardando scroll y recargando...");
-          const mainScroll = document.querySelector('main');
-          if (mainScroll) {
-            sessionStorage.setItem('aal_scroll_pos', mainScroll.scrollTop.toString());
-          }
-          window.location.reload();
-        }
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading, followingOnly, toggleFollowingFilter, updateUserContext }}>

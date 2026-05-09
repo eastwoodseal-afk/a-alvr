@@ -32,19 +32,12 @@ export default function HomeView() {
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
   const gridColumnsClass = "columns-2 md:columns-3 lg:columns-4 xl:columns-6";
 
-  // NUEVO: Candado de seguridad y Freno de Emergencia
   const isFetchingRef = useRef(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchShots = useCallback(async (pageNum: number, isRefresh = false) => {
     if (isFetchingRef.current) return; 
-    
     isFetchingRef.current = true;
     setLoading(true);
-
-    // NUEVO: Creamos un nuevo freno para esta petición
-    abortControllerRef.current = new AbortController();
-    const { signal } = abortControllerRef.current;
 
     try {
         const start = pageNum * BATCH_SIZE; 
@@ -52,17 +45,8 @@ export default function HomeView() {
         
         let query = supabase.from("shots").select("id, image_url, title, description, user_id, author, likes_count, views_count").eq("is_approved", true);
         query = query.order('created_at', { ascending: false }).order('id', { ascending: false }).range(start, end);
-        
-        // NUEVO: Le pasamos el freno a Supabase. Si se acciona, la petición se cancela.
-        query = query.abortSignal(signal);
-        
         const { data, error } = await query;
         
-        // Si fue cancelada a propósito, salimos sin hacer nada
-        if (error && error.name === 'AbortError') {
-          return;
-        }
-
         if (error) throw error;
         if (data) {
           let newShots = data.map(s => ({...s, id: s.id.toString()}));
@@ -80,13 +64,12 @@ export default function HomeView() {
           else setShots((prev) => [...prev, ...processedShots]);
           if (data.length < BATCH_SIZE) setHasMore(false);
         } else setHasMore(false);
-    } catch (err: any) { 
-      if (err.name === 'AbortError') return; // Cancelada, no hay problema
-      console.error(err); 
+    } catch (err) { 
+      console.error("Error cargando shots:", err); 
       setHasMore(false); 
     } finally { 
-      isFetchingRef.current = false; // Liberamos el candado
-      setLoading(false); // LIBERAMOS LA UI (Esto evita el "Cargando..." eterno)
+      isFetchingRef.current = false;
+      setLoading(false); 
     }
   }, [user?.id]);
 
@@ -103,20 +86,6 @@ export default function HomeView() {
     }
     fetchUserInteractions();
   }, [user?.id]);
-
-  // LEY 3.3: FRENO DE EMERGENCIA. Si el usuario se va a otra pestaña 
-  // y hay una petición en curso, la cancelamos para que la UI no se quede trabada.
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort(); // ¡PISAR EL FRENO!
-        }
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
 
   const handleSave = useCallback(async (shotId: string) => { 
     if (!user) return; 
