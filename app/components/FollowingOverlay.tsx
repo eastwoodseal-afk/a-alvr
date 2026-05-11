@@ -5,7 +5,7 @@ import ShotDetailModal from "./ShotDetailModal";
 import UserProfileOverlay from "./UserProfileOverlay"; 
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../lib/AuthContext";
-import { useInfiniteScroll } from "../hooks/useInfiniteScroll"; // NUEVO
+import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
 
 interface UserRelation {
   id: string;
@@ -20,7 +20,6 @@ export default function FollowingOverlay({ onClose }: { onClose: () => void }) {
   const { user } = useAuth();
   const [relatedUsers, setRelatedUsers] = useState<UserRelation[]>([]);
   
-  // NUEVO: Estados de paginación
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [shots, setShots] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -35,13 +34,13 @@ export default function FollowingOverlay({ onClose }: { onClose: () => void }) {
   const [savedShots, setSavedShots] = useState<string[]>([]);
   const [likedShots, setLikedShots] = useState<string[]>([]);
 
-  // 1. Cargar usuarios (Solo una vez)
-    // LEY 1.2: Solo recargar si cambia el ID del usuario, no su objeto completo
   useEffect(() => {
     if (user?.id) fetchUsers(); 
   }, [user?.id]);
 
   const fetchUsers = async () => {
+    if (!user) return; 
+
     setLoadingUsers(true);
     try {
       const [followsRes, sharesRes] = await Promise.all([
@@ -51,11 +50,11 @@ export default function FollowingOverlay({ onClose }: { onClose: () => void }) {
 
       const followingUsers = (followsRes.data || [])
         .map((f: any) => f.profiles ? { id: f.profiles.id, username: f.profiles.username, avatar_url: f.profiles.avatar_url, hasSharedStudio: false } : null)
-        .filter((u): u is UserRelation => u !== null);
+        .filter(Boolean) as UserRelation[];
 
       const studioUsers = (sharesRes.data || [])
         .map((s: any) => s.profiles ? { id: s.profiles.id, username: s.profiles.username, avatar_url: s.profiles.avatar_url, hasSharedStudio: true } : null)
-        .filter((u): u is UserRelation => u !== null);
+        .filter(Boolean) as UserRelation[];
 
       const userMap = new Map<string, UserRelation>();
       followingUsers.forEach(u => userMap.set(u.id, u));
@@ -67,11 +66,9 @@ export default function FollowingOverlay({ onClose }: { onClose: () => void }) {
       const finalUsers = Array.from(userMap.values());
       setRelatedUsers(finalUsers);
 
-      // NUEVO: Extraer IDs y guardarlos para la paginación
       const ids = finalUsers.map(u => u.id);
       setFollowingIds(ids);
 
-      // Cargar interacciones del usuario
       if (user) {
         const [savedRes, likedRes] = await Promise.all([
           supabase.from("saved_shots").select("shot_id").eq("user_id", user.id),
@@ -85,7 +82,6 @@ export default function FollowingOverlay({ onClose }: { onClose: () => void }) {
     finally { setLoadingUsers(false); }
   };
 
-  // 2. Cargar Shots (Paginado)
   useEffect(() => {
     if (followingIds.length > 0) {
       setShots([]); setPage(0); setHasMore(true);
@@ -107,7 +103,8 @@ export default function FollowingOverlay({ onClose }: { onClose: () => void }) {
       .select('id, image_url, title, description, user_id, author, likes_count, views_count')
       .in('user_id', followingIds)
       .eq('is_approved', true)
-      .order('created_at', { ascending: false }) // Orden cronológico estricto para scroll infinito
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(start, end);
 
     if (!error && data) {
@@ -119,7 +116,6 @@ export default function FollowingOverlay({ onClose }: { onClose: () => void }) {
     setLoadingShots(false);
   }, [followingIds, loadingShots]);
 
-  // NUEVO: Hook de scroll infinito
   const loadMore = useCallback(() => {
     if (hasMore && !loadingShots) { 
       const nextPage = page + 1; 
@@ -201,7 +197,6 @@ export default function FollowingOverlay({ onClose }: { onClose: () => void }) {
             {loadingShots && shots.length > 0 && <div className="text-center py-4 text-gray-500">Cargando más...</div>}
             {!hasMore && !loadingShots && shots.length > 0 && <div className="text-center py-4 text-gray-600 text-sm">Fin de tus relaciones.</div>}
 
-            {/* NUEVO: El centinela invisible para el Infinite Scroll */}
             <div ref={sentinelRef} className="h-1 w-full"></div>
         </div>
 

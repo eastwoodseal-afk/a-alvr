@@ -1,0 +1,26 @@
+[33ma78c648[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m)[m fix: AbortSignal timeout en Supabase Client y AuthContext limpio
+[33m7c1f32d[m fix: Desbloqueo suave de UI sin destruir sesiones activas
+[33m9d31a1e[m fix: Timeout en initAuth para destruir sesiones corruptas que congelen Vercel
+[33m3f2af6c[m fix: Eliminado candado muerto en HomeView y Auth mejorado
+[33m8409daf[m fix: Timeout en inicialización de Auth para evitar pantallas blancas en Vercel
+[33mb889de9[m fix: Dead Man's Switch para evitar cuelgues infinitos de auth en Vercel
+[33m2760379[m fix: AuthContext limpio y defensivo, sin parches de red
+[33m0b00919[m fix: Escudo defensivo para Service Role Key en API de importación
+[33mcf4250a[m fix: Limpieza de lineas duplicadas en FollowingOverlay
+[33mb8c7d02[m feat: Constitución A'AL VR - Estabilidad, Cortafuegos y Timeout Global
+[33mfe606fc[m 9mayo
+[33me6a6273[m 9mayo
+[33ma7eb622[m estilo
+[33mfc80743[m fix: Corrección de tipos en HomeView y build exitoso
+[33ma7b6bce[m 2 mayo
+[33mb37c394[m 1mayo
+[33m807244f[m Security: Update Next.js to fix vulnerability
+[33m722ae7f[m Fix: Type error in AllSavedShotsView props
+[33m4549306[m Feat: Sistema de Vistas, Follows y Filtro Mi Gente
+[33m8cdbbf7[m boardname
+[33m03ba272[m Actualización completa del proyecto weekaweek
+[33m8d8f2e7[m fix: uso de NEXT_PUBLIC_BASE_URL en redirecciones y navegación
+[33m6f31a77[m Fix: type errors and null checks for Vercel deployment
+[33m19c394e[m fix: tipado Shot y props MasonryGrid para Vercel
+[33m923719d[m Primer commit
+[33m125cc0c[m Initial commit from Create Next App
