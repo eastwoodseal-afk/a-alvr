@@ -7,9 +7,9 @@ export default function AboutOverlay({ onClose }: { onClose: () => void }) {
     <div className="fixed top-14 left-0 right-0 bottom-0 z-[40] bg-gray-950 text-gray-200 flex flex-col overflow-y-auto custom-scrollbar" onClick={onClose}>
       <div className="max-w-3xl w-full mx-auto py-20 px-6 relative" onClick={e => e.stopPropagation()}>
         
-        {/* Título Principal */}
+        {/* Título Principal - ACTUALIZADO */}
         <h1 className="text-3xl md:text-5xl font-bold text-white mb-4" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
-            A'AL VR: La Arquitectura de la Memoria Colectiva
+            ATENEO D' ARQUITECTURA LATINOAMERICANA: La Arquitectura de la Memoria Colectiva
         </h1>
         
         <div className="h-1 w-24 bg-yellow-500 mb-8"></div>
@@ -99,13 +99,13 @@ export default function AboutOverlay({ onClose }: { onClose: () => void }) {
             </p>
 
             <ul className="list-disc pl-6 space-y-4 text-gray-400 mt-4">
-                <li><strong className="text-white">Preservar:</strong> Crear un respaldo visual de la arquitectura latinoamericana que resiste el paso del tiempo y los cambios tecnológicos.</li>
+                <li><strong className="text-white">Preservar:</strong> Crear un respaldo visual de la arquitectura latinoamericana que resista el paso del tiempo y los cambios technologicos.</li>
                 <li><strong className="text-white">Educación:</strong> Ser la herramienta de referencia en las facultades de arquitectura, desplazando la búsqueda desordenada de imágenes por una navegación curada y con sentido.</li>
-                <li><strong className="text-white">Comunidad:</strong> Crear una red profesional donde la relación no se base en el seguimiento egoísta, sino en el interés común por el espacio que habitamos.</li>
+                <li><strong className="text-white">Comunidad:</strong> Créer une réseau professionnel où la relation ne se base pas sur le suivi egoísta, sino en el interés común por el espacio que habitamos.</li>
             </ul>
 
             <p className="mt-10 text-xl text-white font-semibold text-center italic border-t border-gray-800 pt-10">
-                "A'AL VR es una estación espacial modular, construida para expandirse. Hoy vemos los cimientos, las columnas y los muros de carga. Mañana, veremos cómo los investigadores colgarán sus tesis en estas paredes virtuales, cómo los estudios archivarán su legado y cómo las nuevas generaciones aprenderán a mirar con ojos críticos."
+                "A'AL VR est une station spatiale modulaire, construite pour s'étendre. Aujourd'hui, nous voyons les fondations, les colonnes et les murs porteurs. Demain, nous verrons comment les chercheurs accrocheront leurs thèses sur ces murs virtuels, comment les studios archiveront leur héritage et comment les nouvelles générations apprendront à regarder avec des yeux critiques."
             </p>
             
             <p className="mt-6 text-center text-yellow-500 font-bold text-xl" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
