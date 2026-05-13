@@ -105,8 +105,8 @@ export default function AboutOverlay({ onClose }: { onClose: () => void }) {
             </ul>
 
             <p className="mt-10 text-xl text-white font-semibold text-center italic border-t border-gray-800 pt-10">
-                "A'AL VR est une station spatiale modulaire, construite pour s'étendre. Aujourd'hui, nous voyons les fondations, les colonnes et les murs porteurs. Demain, nous verrons comment les chercheurs accrocheront leurs thèses sur ces murs virtuels, comment les studios archiveront leur héritage et comment les nouvelles générations apprendront à regarder avec des yeux critiques."
-            </p>
+    "A'AL VR es un espacio modular, construido para expandirse. Hoy vemos los cimientos, las columnas y los muros de carga. Mañana veremos cómo los investigadores colgarán sus tesis en estos muros virtuales, cómo los estudios archivarán su legado y cómo las nuevas generaciones aprenderán a mirar con ojos críticos."
+</p>
             
             <p className="mt-6 text-center text-yellow-500 font-bold text-xl" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
                 No estamos construyendo otra red social.<br/>Estamos construyendo la memoria de lo que somos.
