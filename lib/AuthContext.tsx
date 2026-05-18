@@ -1,101 +1,90 @@
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
-import { UserWithRole } from "./roleUtils";
-import { User } from "@supabase/supabase-js";
+import { Session, User } from "@supabase/supabase-js";
+import { UserRole } from "./roleUtils"; // NUEVO: Importamos el tipo estricto
+
+interface LabUser {
+  id: string;
+  email: string;
+  username: string | null;
+  role: UserRole; // ACTUALIZADO: De 'string' a UserRole
+  avatar_url: string | null;
+}
 
 const AuthContext = createContext<{ 
-  user: UserWithRole | null, 
+  session: Session | null, 
+  user: LabUser | null,
   loading: boolean,
-  followingOnly: boolean,
-  toggleFollowingFilter: () => void,
-  updateUserContext: (updates: Partial<UserWithRole>) => void
+  updateUsername: (newUsername: string) => void
 }>({ 
-  user: null, 
+  session: null, 
+  user: null,
   loading: true,
-  followingOnly: false,
-  toggleFollowingFilter: () => {},
-  updateUserContext: () => {}
+  updateUsername: () => {}
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<UserWithRole | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<LabUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [followingOnly, setFollowingOnly] = useState(false);
 
-  const toggleFollowingFilter = () => setFollowingOnly(prev => !prev);
+  const fetchProfile = async (supabaseUser: User) => {
+    const { data } = await supabase.from('profiles').select('username, role, avatar_url').eq('id', supabaseUser.id).single();
+    
+    const googleAvatar = supabaseUser.user_metadata?.avatar_url;
+    let avatarUrl = data?.avatar_url || googleAvatar || null;
 
-  const updateUserContext = (updates: Partial<UserWithRole>) => {
-    setUser(prev => prev ? { ...prev, ...updates } : null);
-  };
-
-  const fetchProfileAndSetAdmin = async (supabaseUser: User) => {
-    try {
-      const userId = supabaseUser.id;
-      const userEmail = supabaseUser.email;
-
-      const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-      if (error) throw error;
-
-      const googleAvatar = supabaseUser.user_metadata?.avatar_url;
-      let avatarUrl = profile?.avatar_url || googleAvatar || null;
-      if (profile && !profile.avatar_url && googleAvatar) {
-           await supabase.from('profiles').update({ avatar_url: googleAvatar }).eq('id', userId);
-           avatarUrl = googleAvatar; 
-      }
-
-      if (profile && userEmail === 'eastwood.seal@gmail.com' && profile.role !== 'superadmin') {
-          await supabase.from('profiles').update({ role: 'superadmin', promoted_by: userId, promoted_at: new Date().toISOString() }).eq('id', userId);
-          try { await supabase.from('role_promotions').insert({ user_id: userId, promoted_by: userId, old_role: profile.role || 'subscriber', new_role: 'superadmin', notes: 'Auto-verified' }); } catch (e) {}
-          profile.role = 'superadmin';
-      }
-
-      if (profile) {
-        const newUserData = { id: profile.id, email: userEmail ?? "", username: profile.username, role: profile.role, created_at: profile.created_at, promoted_by: profile.promoted_by, promoted_at: profile.promoted_at, avatar_url: avatarUrl };
-        
-        // CORTAFUEGOS: Solo actualiza si cambió el dato real
-        setUser(prev => {
-          if (prev && prev.id === newUserData.id && prev.username === newUserData.username && prev.role === newUserData.role && prev.avatar_url === newUserData.avatar_url) {
-            return prev; 
-          }
-          return newUserData; 
-        });
-
-      } else { setUser(null); }
-
-    } catch (err) {
-      console.error("Error en fetchProfile:", err);
+    if (data && !data.avatar_url && googleAvatar) {
+       await supabase.from('profiles').update({ avatar_url: googleAvatar }).eq('id', supabaseUser.id);
+       avatarUrl = googleAvatar; 
     }
+
+    setUser({
+      id: supabaseUser.id,
+      email: supabaseUser.email || "",
+      username: data?.username || null,
+      role: (data?.role as UserRole) || 'subscriber', // CASTEO SEGURO
+      avatar_url: avatarUrl
+    });
   };
 
-  const getSession = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) { await fetchProfileAndSetAdmin(session.user); } 
-      else { setUser(null); }
-    } catch (err) { console.error(err); } 
-    finally { setLoading(false); }
+  const updateUsername = (newUsername: string) => {
+    setUser(prev => prev ? { ...prev, username: newUsername } : null);
   };
-  getSession();
 
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      try {
-        if (session?.user) { 
-          await fetchProfileAndSetAdmin(session.user); 
-        } else { 
-          setUser(null); 
-        }
-      } catch (err) { 
-        console.error("Error en AuthStateChange:", err); 
-      } finally { 
-        setLoading(false); 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        fetchProfile(session.user);
+      } else {
+        setUser(null);
       }
-  });
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(prev => {
+        if (prev?.access_token === session?.access_token) return prev;
+        return session;
+      });
+
+      if (event === 'SIGNED_IN' && session?.user) {
+        fetchProfile(session.user);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, followingOnly, toggleFollowingFilter, updateUserContext }}>
+    <AuthContext.Provider value={{ session, user, loading, updateUsername }}>
       {children}
     </AuthContext.Provider>
   );
 }
+
 export const useAuth = () => useContext(AuthContext);

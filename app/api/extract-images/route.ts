@@ -15,7 +15,6 @@ export async function POST(req: NextRequest) {
     $('img').each((_, el) => {
       let src = $(el).attr('src');
       if (src) {
-        // Resolver URLs relativas
         if (!/^https?:\/\//.test(src)) {
           const base = new URL(url);
           src = new URL(src, base).href;
