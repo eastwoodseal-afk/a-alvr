@@ -55,6 +55,18 @@ export default function Home() {
   const [disapprovingId, setDisapprovingId] = useState<string | null>(null);
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
 
+     // 🆕 ESTADO: Toggle de vista (Mosaico vs Feed)
+  const [isSingleColumn, setIsSingleColumn] = useState(false);
+
+  // 🆕 Escuchar evento del Footer (Grid View)
+  useEffect(() => {
+    const handleGridView = (e: any) => {
+      setIsSingleColumn(e.detail || false);
+    };
+    window.addEventListener('grid-view-changed', handleGridView);
+    return () => window.removeEventListener('grid-view-changed', handleGridView);
+  }, []);
+
   // 🆕 NUEVO: Estado del filtro de categoría
   const [categoryFilter, setCategoryFilter] = useState<string>("");
 
@@ -198,6 +210,9 @@ export default function Home() {
 
   return (
     <section className="flex w-full">
+        
+
+
       <div className="flex-1 p-2 overflow-y-auto">
         
         {/* 🆕 NUEVO: Indicador de filtro activo */}
@@ -221,7 +236,7 @@ export default function Home() {
         
         {loading && shots.length === 0 && <p className="text-center py-8 text-gray-400 animate-pulse">Cargando Ateneo...</p>}
 
-        <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-6 gap-2 w-full">
+                        <div className={`${isSingleColumn ? 'columns-1 max-w-xl mx-auto' : 'columns-2 md:columns-3 lg:columns-4 xl:columns-6'} gap-2 w-full`}>
           {shots.map(shot => (
             <ShotCard 
               key={shot.id} 

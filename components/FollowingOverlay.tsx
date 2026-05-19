@@ -6,7 +6,7 @@ import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
 import ShotCard from "./ShotCard";
 import ShotDetailModal from "./ShotDetailModal";
 import UserProfileOverlay from "./UserProfileOverlay";
-import PublicCollectionOverlay from "./PublicCollectionOverlay"; // NUEVO
+import PublicCollectionOverlay from "./PublicCollectionOverlay";
 
 interface UserRelation {
   id: string;
@@ -25,7 +25,6 @@ interface Props {
 export default function FollowingOverlay({ userId, onClose }: Props) {
   const { user: currentUser } = useAuth();
   const [relatedUsers, setRelatedUsers] = useState<UserRelation[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(true);
   
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [shots, setShots] = useState<any[]>([]);
@@ -34,16 +33,15 @@ export default function FollowingOverlay({ userId, onClose }: Props) {
   const [page, setPage] = useState(0);
   const isFetchingRef = useRef(false);
 
-  // NUEVO: Estado para la Vitrina Pública (Avatar)
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
-  
-  // Estado existente: Para el Estudio Compartido (Botón Azul)
   const [selectedStudioId, setSelectedStudioId] = useState<string | null>(null);
-  
-  // Interacciones del Muro
   const [selectedShot, setSelectedShot] = useState<any | null>(null);
   const [savedShots, setSavedShots] = useState<string[]>([]);
   const [likedShots, setLikedShots] = useState<string[]>([]);
+
+  // 🆕 Estado del drawer en móvil
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(true);
 
   useEffect(() => {
     if (!userId) return;
@@ -114,75 +112,88 @@ export default function FollowingOverlay({ userId, onClose }: Props) {
   const handleView = useCallback(async (shotId: string) => { await supabase.rpc('increment_view', { shot_id: parseInt(shotId) }); setShots(prev => prev.map(s => s.id === shotId ? { ...s, views_count: (s.views_count || 0) + 1 } : s)); }, []);
 
   return (
-    <div className="fixed top-14 left-0 right-0 bottom-0 z-40 bg-gray-950 flex flex-col md:grid md:grid-cols-[180px_1fr] overflow-hidden">
+    <div className="fixed top-14 left-0 right-0 bottom-0 z-[40] bg-gray-950 flex flex-col overflow-hidden">
         
-      {/* SIDEBAR IZQUIERDO */}
-      <aside className="w-full h-auto md:h-full border-r border-gray-800 bg-gray-900/50 overflow-y-auto pt-4 pb-4 custom-scrollbar">
-        <div className="px-2 mb-4 flex justify-between items-center md:block">
-          <h3 className="text-xs font-bold text-yellow-500 uppercase tracking-wider text-center">RELACIONES</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-white text-xl font-bold md:hidden">&times;</button>
-        </div>
-        <div className="space-y-1 px-1">
-          {loadingUsers ? <div className="text-center text-gray-500 p-4 text-xs">Cargando...</div> :
-           relatedUsers.length === 0 ? <div className="text-center text-gray-600 text-xs p-4">Vacío</div> :
-           relatedUsers.map((u) => (
-            <div key={u.id} className="w-full flex flex-col items-center gap-1 p-1">
-              <div className="w-full flex items-center justify-center gap-1">
-                {/* AVATAR -> ABRE VITRINA PÚBLICA */}
-                <button onClick={() => setSelectedCollectionId(u.id)} className="flex flex-col items-center hover:opacity-80 transition" title="Ver Colección">
-                  <div className="w-7 h-7 rounded-full bg-gray-700 overflow-hidden shrink-0 flex items-center justify-center text-[10px] font-bold text-white border border-gray-600">
+      {/* HEADER COMPACTO */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-800 bg-gray-900/50 flex-shrink-0">
+        <button onClick={onClose} className="w-7 h-7 rounded-full bg-gray-700 hover:bg-gray-600 text-yellow-500 flex items-center justify-center flex-shrink-0 transition">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+        </button>
+        <h3 className="text-xs font-bold text-yellow-500 uppercase tracking-wider">RELACIONES</h3>
+        
+        {/* 🆕 BOTÓN DRAWER MÓVIL */}
+        <button 
+          onClick={() => setDrawerOpen(!drawerOpen)}
+          className="md:hidden ml-auto bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-full h-7 px-3 flex items-center gap-1 text-[10px] font-bold transition"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M4.5 6.375a4.125 4.125 0 118.25 0 4.125 4.125 0 01-8.25 0zM14.25 8.625a3.375 3.375 0 116.75 0 3.375 3.375 0 01-6.75 0z" /></svg>
+          {relatedUsers.length}
+        </button>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden relative">
+        
+        {/* --- SIDEBAR: DRAWER EN MÓVIL / FIJO EN ESCRITORIO --- */}
+        
+        {/* Overlay oscuro móvil */}
+        {drawerOpen && (
+          <div 
+            className="md:hidden fixed inset-0 bg-black/50 z-10"
+            onClick={() => setDrawerOpen(false)}
+          />
+        )}
+
+        <aside className={`
+          fixed md:static top-14 left-0 bottom-0 w-48 bg-gray-900/95 backdrop-blur-sm border-r border-gray-800 flex-shrink-0 flex flex-col overflow-y-auto custom-scrollbar z-20 transition-transform duration-300
+          ${drawerOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        `}>
+          <div className="px-2 py-3 border-b border-gray-800 hidden md:block">
+            <h3 className="text-[10px] font-bold text-yellow-500 uppercase tracking-wider text-center">RELACIONES</h3>
+          </div>
+          <div className="space-y-1 px-2 py-2">
+            {loadingUsers ? <div className="text-center text-gray-500 p-4 text-xs">Cargando...</div> :
+             relatedUsers.length === 0 ? <div className="text-center text-gray-600 text-xs p-4">Vacío</div> :
+             relatedUsers.map((u) => (
+              <div key={u.id} className="w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-800 transition">
+                <button onClick={() => { setSelectedCollectionId(u.id); setDrawerOpen(false); }} className="flex items-center gap-2 hover:opacity-80 transition min-w-0 flex-1" title="Ver Colección">
+                  <div className="w-7 h-7 rounded-full bg-gray-700 overflow-hidden flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white border border-gray-600">
                     {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover" referrerPolicy="no-referrer"/> : (u.username || "?").charAt(0).toUpperCase()}
                   </div>
+                  <span className="text-[11px] text-gray-300 truncate">@{u.username}</span>
                 </button>
-                {/* BOTÓN AZUL -> ABRE ESTUDIO COMPARTIDO */}
                 {u.hasSharedStudio && (
-                  <button onClick={() => setSelectedStudioId(u.id)} className="bg-blue-600 rounded-full w-7 h-7 flex items-center justify-center shadow hover:bg-blue-500 transition flex-shrink-0" title="Ver Estudio Compartido">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 text-white"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" /></svg>
+                  <button onClick={() => { setSelectedStudioId(u.id); setDrawerOpen(false); }} className="bg-blue-600 rounded-full w-[24px] h-[24px] flex items-center justify-center shadow hover:bg-blue-500 transition flex-shrink-0" title="Ver Estudio">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5 text-white"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" /></svg>
                   </button>
                 )}
               </div>
-              <button onClick={() => setSelectedCollectionId(u.id)} className="w-full text-center hover:opacity-80 transition">
-                <span className="text-[10px] text-gray-400 truncate block px-1">@{u.username}</span>
-              </button>
-            </div>
-          ))}
-        </div>
-      </aside>
+            ))
+            }
+          </div>
+        </aside>
 
-      {/* GRID DERECHO */}
-      <div className="flex-1 min-w-0 h-full overflow-y-auto relative p-2 custom-scrollbar">
-        {loadingShots && shots.length === 0 ? <div className="text-center py-8 text-gray-400">Cargando...</div> : 
-         shots.length === 0 ? <div className="text-center py-8 text-gray-500">Sin shots aprobados.</div> :
-         <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-6 gap-2 w-full">
-            {shots.map(shot => (
-              <ShotCard key={shot.id} shot={shot} isSaved={savedShots.includes(shot.id)} isSaving={false} onSave={() => handleSave(shot.id)} isLiked={likedShots.includes(shot.id)} likesCount={shot.likes_count || 0} isLiking={false} onLike={() => handleLike(shot.id)} viewsCount={shot.views_count || 0} user={currentUser} onClick={() => setSelectedShot(shot)} />
-            ))}
-         </div>
-        }
-        {loadingShots && shots.length > 0 && <div className="text-center py-4 text-gray-500">Cargando más...</div>}
-        <div ref={sentinelRef} className="h-1 w-full"></div>
+        {/* --- GRID DERECHO (1 COLUMNA EN MÓVIL) --- */}
+        <div className="flex-1 min-w-0 h-full overflow-y-auto relative p-2 custom-scrollbar">
+          {loadingShots && shots.length === 0 ? <div className="text-center py-8 text-gray-400">Cargando...</div> : 
+           shots.length === 0 ? <div className="text-center py-8 text-gray-500">Sin shots aprobados.</div> :
+           <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-6 gap-2 w-full">
+              {shots.map(shot => (
+                <ShotCard key={shot.id} shot={shot} isSaved={savedShots.includes(shot.id)} isSaving={false} onSave={() => handleSave(shot.id)} isLiked={likedShots.includes(shot.id)} likesCount={shot.likes_count || 0} isLiking={false} onLike={() => handleLike(shot.id)} viewsCount={shot.views_count || 0} user={currentUser} onClick={() => setSelectedShot(shot)} />
+              ))}
+           </div>
+          }
+          {loadingShots && shots.length > 0 && <div className="text-center py-4 text-gray-500">Cargando más...</div>}
+          <div ref={sentinelRef} className="h-1 w-full"></div>
+        </div>
       </div>
 
-      {/* --- MODALES Y OVERLAYS --- */}
-
-      {/* NUEVO: Vitrina Pública (Clic en Avatar) */}
+      {/* MODALES */}
       {selectedCollectionId && (
-        <PublicCollectionOverlay 
-          userId={selectedCollectionId}
-          onClose={() => setSelectedCollectionId(null)}
-        />
+        <PublicCollectionOverlay userId={selectedCollectionId} onClose={() => setSelectedCollectionId(null)} />
       )}
-
-      {/* EXISTENTE: Estudio Compartido (Clic en Botón Azul) */}
       {selectedStudioId && (
-        <UserProfileOverlay 
-          userId={selectedStudioId}
-          onClose={() => setSelectedStudioId(null)}
-          studioMode={true}
-        />
+        <UserProfileOverlay userId={selectedStudioId} onClose={() => setSelectedStudioId(null)} studioMode={true} />
       )}
-
-      {/* Modal Detalle del Muro */}
       {selectedShot && ( 
         <ShotDetailModal shot={selectedShot} onClose={() => setSelectedShot(null)} isSaved={savedShots.includes(selectedShot.id)} isSaving={false} onSave={() => handleSave(selectedShot.id)} user={currentUser} isLiked={likedShots.includes(selectedShot.id)} likesCount={selectedShot.likes_count || 0} onLike={() => handleLike(selectedShot.id)} viewsCount={selectedShot.views_count || 0} onView={handleView} /> 
       )}

@@ -17,6 +17,9 @@ export default function Footer() {
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(false);
 
+  // --- 🆕 ESTADO TOGGLE VISTA ---
+  const [isSingleColumn, setIsSingleColumn] = useState(false);
+
   // Leer si el filtro está activado
   useEffect(() => {
     const fetchSettings = async () => {
@@ -37,33 +40,24 @@ export default function Footer() {
     }
   }, [categoryFilterEnabled]);
 
-  // Cerrar dropdown de categoría al hacer clic fuera
+  // Cerrar dropdowns al hacer clic fuera
   useEffect(() => {
-    if (!showCategoryDropdown) return;
-    function handleClick(e: MouseEvent) {
-      const dropdown = document.getElementById("category-dropdown");
-      const btn = document.getElementById("category-btn");
-      if (dropdown && !dropdown.contains(e.target as Node) && btn && !btn.contains(e.target as Node)) {
+    const handleClick = (e: MouseEvent) => {
+      const categoryDropdown = document.getElementById("category-dropdown");
+      const categoryBtn = document.getElementById("category-btn");
+      const menu = document.getElementById("footer-menu-dropdown");
+      const menuBtn = document.getElementById("footer-menu-btn");
+
+      if (showCategoryDropdown && categoryDropdown && !categoryDropdown.contains(e.target as Node) && categoryBtn && !categoryBtn.contains(e.target as Node)) {
         setShowCategoryDropdown(false);
       }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [showCategoryDropdown]);
-
-  // Cerrar menú de creación al hacer clic fuera
-  useEffect(() => {
-    if (!showMenu) return;
-    function handleClick(e: MouseEvent) {
-      const menu = document.getElementById("footer-menu-dropdown");
-      const btn = document.getElementById("footer-menu-btn");
-      if (menu && !menu.contains(e.target as Node) && btn && !btn.contains(e.target as Node)) {
+      if (showMenu && menu && !menu.contains(e.target as Node) && menuBtn && !menuBtn.contains(e.target as Node)) {
         setShowMenu(false);
       }
-    }
+    };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [showMenu]);
+  }, [showCategoryDropdown, showMenu]);
 
   const canCreate = user ? hasPermission(user.role, 'canCreateShots') : false;
 
@@ -71,84 +65,109 @@ export default function Footer() {
     const newCategory = selectedCategory === categoryId ? "" : categoryId;
     setSelectedCategory(newCategory);
     setShowCategoryDropdown(false);
-    // Avisar al HomeView
     window.dispatchEvent(new CustomEvent('category-filter-changed', { detail: newCategory }));
+  };
+
+  // 🆕 Función toggle vista
+  const handleToggleView = () => {
+    const newValue = !isSingleColumn;
+    setIsSingleColumn(newValue);
+    window.dispatchEvent(new CustomEvent('grid-view-changed', { detail: newValue }));
   };
 
   return (
     <>
       <footer className="fixed bottom-0 left-0 right-0 w-full h-16 py-4 px-6 bg-gray-800 text-gray-200 text-sm flex items-center justify-between z-40 border-t border-gray-700">
         
-        {/* --- LADO IZQUIERDO: FILTRO DE CATEGORÍAS --- */}
-        <div className="relative">
-          <button 
-            id="category-btn"
-            className={`rounded-full h-7 px-3 flex items-center gap-1.5 text-xs font-bold transition-all border ${
-              !categoryFilterEnabled 
-                ? 'bg-gray-700/50 text-gray-500 border-gray-700 cursor-not-allowed opacity-50' 
-                : selectedCategory 
-                  ? 'bg-yellow-500 text-black border-yellow-400 shadow-lg shadow-yellow-500/20' 
-                  : 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600'
-            }`}
-            onClick={() => categoryFilterEnabled && setShowCategoryDropdown(!showCategoryDropdown)}
-            disabled={!categoryFilterEnabled}
-            title={categoryFilterEnabled ? "Filtrar por categoría" : "Filtro desactivado"}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
-            </svg>
-            {selectedCategory 
-              ? (categories.find(c => c.id.toString() === selectedCategory)?.name || "Filtrar") 
-              : "Categorías"
-            }
-          </button>
+        {/* --- LADO IZQUIERDO: CATEGORÍAS + TOGGLE VISTA --- */}
+        <div className="flex items-center gap-3">
 
-          {/* DROPDOWN HACIA ARRIBA */}
-          {showCategoryDropdown && categoryFilterEnabled && (
-            <div 
-              id="category-dropdown"
-              className="absolute bottom-12 left-0 w-56 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50"
+          {/* BOTÓN CATEGORÍAS (Redondo con icono) */}
+          <div className="relative">
+            <button 
+              id="category-btn"
+              className={`rounded-full w-[28px] h-[28px] flex items-center justify-center shadow transition-all ${
+                !categoryFilterEnabled 
+                  ? 'bg-gray-700/50 text-gray-600 cursor-not-allowed opacity-50' 
+                  : selectedCategory 
+                    ? 'bg-yellow-500 text-black' 
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+              onClick={() => categoryFilterEnabled && setShowCategoryDropdown(!showCategoryDropdown)}
+              disabled={!categoryFilterEnabled}
+              title={categoryFilterEnabled ? "Filtrar por categoría" : "Filtro desactivado"}
             >
-              <div className="max-h-72 overflow-y-auto custom-scrollbar">
-                {/* Opción: Todas */}
-                <div className="p-1.5 border-b border-gray-700">
-                  <button 
-                    onClick={() => handleCategorySelect("")}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition ${
-                      selectedCategory === "" ? 'bg-yellow-500 text-black' : 'text-gray-300 hover:bg-gray-800'
-                    }`}
-                  >
-                    Todas las categorías
-                  </button>
-                </div>
-                
-                {/* Lista de categorías */}
-                <div className="p-1.5 space-y-0.5">
-                  {loadingCategories ? (
-                    <div className="text-center py-3 text-gray-500 text-xs animate-pulse">Cargando...</div>
-                  ) : categories.length === 0 ? (
-                    <div className="text-center py-3 text-gray-600 text-xs italic">Sin categorías aún</div>
-                  ) : (
-                    categories.map(cat => (
-                      <button 
-                        key={cat.id}
-                        onClick={() => handleCategorySelect(cat.id.toString())}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition ${
-                          selectedCategory === cat.id.toString() ? 'bg-yellow-500 text-black' : 'text-gray-300 hover:bg-gray-800'
-                        }`}
-                      >
-                        {cat.name}
-                      </button>
-                    ))
-                  )}
+              {/* Icono: Tag/Etiqueta */}
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+              </svg>
+            </button>
+
+            {/* DROPDOWN HACIA ARRIBA */}
+            {showCategoryDropdown && categoryFilterEnabled && (
+              <div 
+                id="category-dropdown"
+                className="absolute bottom-10 left-0 w-56 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50"
+              >
+                <div className="max-h-72 overflow-y-auto custom-scrollbar">
+                  <div className="p-1.5 border-b border-gray-700">
+                    <button 
+                      onClick={() => handleCategorySelect("")}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition ${
+                        selectedCategory === "" ? 'bg-yellow-500 text-black' : 'text-gray-300 hover:bg-gray-800'
+                      }`}
+                    >
+                      Todas las categorías
+                    </button>
+                  </div>
+                  <div className="p-1.5 space-y-0.5">
+                    {loadingCategories ? (
+                      <div className="text-center py-3 text-gray-500 text-xs animate-pulse">Cargando...</div>
+                    ) : categories.length === 0 ? (
+                      <div className="text-center py-3 text-gray-600 text-xs italic">Sin categorías</div>
+                    ) : (
+                      categories.map(cat => (
+                        <button 
+                          key={cat.id}
+                          onClick={() => handleCategorySelect(cat.id.toString())}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition ${
+                            selectedCategory === cat.id.toString() ? 'bg-yellow-500 text-black' : 'text-gray-300 hover:bg-gray-800'
+                          }`}
+                        >
+                          {cat.name}
+                        </button>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+
+          {/* 🆕 BOTÓN TOGGLE VISTA (Redondo con icono) */}
+          <button 
+            onClick={handleToggleView}
+            className={`rounded-full w-[28px] h-[28px] flex items-center justify-center shadow transition-all ${
+              isSingleColumn ? 'bg-blue-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+            title={isSingleColumn ? "Vista Mosaico" : "Vista Feed"}
+          >
+            {isSingleColumn ? (
+              // Icono: Mosaico (4 cuadros)
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+              </svg>
+            ) : (
+              // Icono: Lista/Feed
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
+              </svg>
+            )}
+          </button>
         </div>
 
-        {/* --- LADO DERECHO: BOTÓN + (Existente) --- */}
+        {/* --- LADO DERECHO: BOTÓN + --- */}
         <div className="relative">
           <div className="relative inline-block group">
             <button
