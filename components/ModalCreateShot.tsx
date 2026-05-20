@@ -3,6 +3,8 @@ import React, { useState } from "react";
 import axios from "axios";
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from "../lib/AuthContext";
+import TagInput from "./TagInput";
+import { Tag, saveShotTags } from "../lib/tagUtils"; // 🆕 IMPORT
 
 interface ModalCreateShotProps {
   open: boolean;
@@ -10,7 +12,7 @@ interface ModalCreateShotProps {
   onClose: () => void;
 }
 
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
 export default function ModalCreateShot({ open, section, onClose }: ModalCreateShotProps) {
   const { user } = useAuth();
@@ -20,9 +22,12 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
 
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
-  const [architect, setArchitect] = useState(""); // NUEVO: Campo de arquitecto
+  const [architect, setArchitect] = useState("");
   const [description, setDescription] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  
+  // 🆕 ESTADO DE TAGS
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
 
   const [multiFiles, setMultiFiles] = useState<File[]>([]);
   const [multiLoading, setMultiLoading] = useState(false);
@@ -39,7 +44,8 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
   const handleClose = () => {
     onClose();
     setError(null); setSuccess(null);
-    setFile(null); setTitle(""); setArchitect(""); setDescription(""); setPreviewUrl(null); // Limpieza añadida
+    setFile(null); setTitle(""); setArchitect(""); setDescription(""); setPreviewUrl(null);
+    setSelectedTags([]); // 🆕 Limpiar tags
     setMultiFiles([]); setMultiLoading(false);
     setSiteUrl(""); setSiteImages([]); setSelectedImages([]); setShowImagesOverlay(false);
     setImportProgress({ current: 0, total: 0 });
@@ -67,10 +73,15 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
       if (uploadError) throw uploadError;
       const { data: publicData } = supabase.storage.from('shots').getPublicUrl(filePath);
       
-      // CORRECCIÓN FILOSÓFICA: author ahora recibe el campo arquitecto, o null
       const shotData = { user_id: user.id, title, description, image_url: publicData.publicUrl, author: architect.trim() || null };
-      const { error: insertError } = await supabase.from('shots').insert(shotData);
+      
+      // 🆕 AÑADIDO .select('id').single() para obtener el ID del shot recién creado
+      const { data: newShot, error: insertError } = await supabase.from('shots').insert(shotData).select('id').single();
       if (insertError) throw insertError;
+      
+      // 🆕 GUARDAR TAGS
+      if (newShot) await saveShotTags(newShot.id.toString(), selectedTags);
+
       setSuccess("Shot subido correctamente.");
       setTimeout(() => handleClose(), 1500);
     } catch (err: any) { setError(err.message || "Error al subir."); } finally { setLoading(false); }
@@ -89,10 +100,12 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
         if (uploadError) throw uploadError;
         const { data } = supabase.storage.from('shots').getPublicUrl(filePath);
         
-        // CORRECCIÓN FILOSÓFICA
         const shotData = { user_id: user.id, title: fileItem.name, description: '', image_url: data.publicUrl, author: architect.trim() || null };
-        const { error: insertError } = await supabase.from('shots').insert(shotData);
-        if (insertError) throw insertError;
+        const { data: newShot } = await supabase.from('shots').insert(shotData).select('id').single();
+        
+        // 🆕 GUARDAR TAGS (Se aplican a todos los del lote)
+        if (newShot) await saveShotTags(newShot.id.toString(), selectedTags);
+        
         successCount++;
       } catch { errorCount++; }
     }
@@ -126,11 +139,12 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
         const importedImages = res.data.results || [];
         if (importedImages.length > 0) {
           const img = importedImages[0];
-          
-          // CORRECCIÓN FILOSÓFICA
           const shotData = { user_id: user.id, title: img.originalUrl.split("/").pop() || "Imagen web", description: '', image_url: img.publicUrl, source_url: img.originalUrl, author: architect.trim() || null };
-          const { error: insertError } = await supabase.from('shots').insert(shotData);
-          if (insertError) throw insertError;
+          const { data: newShot } = await supabase.from('shots').insert(shotData).select('id').single();
+          
+          // 🆕 GUARDAR TAGS
+          if (newShot) await saveShotTags(newShot.id.toString(), selectedTags);
+          
           successCount++;
         } else { errorCount++; }
       } catch { errorCount++; }
@@ -165,11 +179,12 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
               )}
             </div>
             <input type="text" className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white" placeholder="Título (Obligatorio)" value={title} onChange={e => setTitle(e.target.value)} required />
-            
-            {/* NUEVO: CAMPO ARQUITECTO */}
             <input type="text" className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white" placeholder="Arquitecto / Estudio" value={architect} onChange={e => setArchitect(e.target.value)} />
-            
             <textarea className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white" placeholder="Descripción (opcional)" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
+            
+            {/* 🆕 INPUT DE ETIQUETAS */}
+            <TagInput selectedTags={selectedTags} onChange={setSelectedTags} />
+
             <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-500 transition disabled:opacity-50" disabled={loading}>
               {loading ? "Subiendo..." : "Subir archivo"}
             </button>
@@ -193,10 +208,11 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
                 ))}
               </div>
             )}
-            
-            {/* NUEVO: CAMPO ARQUITECTO COMPARTIDO */}
             <input type="text" className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white" placeholder="Arquitecto / Estudio (Se aplica a todos)" value={architect} onChange={e => setArchitect(e.target.value)} />
             
+            {/* 🆕 INPUT DE ETIQUETAS (Se aplica a todos) */}
+            <TagInput selectedTags={selectedTags} onChange={setSelectedTags} />
+
             <button type="submit" className="w-full bg-green-600 text-white py-2 rounded-lg font-bold hover:bg-green-500 transition disabled:opacity-50" disabled={multiLoading}>
               {multiLoading ? `Subiendo... (${multiFiles.length})` : `Subir ${multiFiles.length || ''} archivos`}
             </button>
@@ -225,8 +241,12 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
                     <button className="bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold shadow" onClick={() => !siteLoading && setShowImagesOverlay(false)} disabled={siteLoading}>&times;</button>
                   </div>
                   
-                  {/* NUEVO: ASIGNAR ARQUITECTO ANTES DE PRESERVAR */}
                   <input type="text" className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm mb-4" placeholder="Arquitecto / Estudio (Se aplica a todos)" value={architect} onChange={e => setArchitect(e.target.value)} />
+                  
+                  {/* 🆕 INPUT DE ETIQUETAS (Se aplica a todos) */}
+                  <div className="w-full mb-4">
+                    <TagInput selectedTags={selectedTags} onChange={setSelectedTags} />
+                  </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4 w-full mb-4 overflow-y-auto">
                     {siteImages.map((img, idx) => (
@@ -260,11 +280,12 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
               )}
             </div>
             <input type="text" className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white" placeholder="Título (Obligatorio)" value={title} onChange={e => setTitle(e.target.value)} required />
-            
-            {/* NUEVO: CAMPO ARQUITECTO */}
             <input type="text" className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white" placeholder="Arquitecto / Estudio" value={architect} onChange={e => setArchitect(e.target.value)} />
-            
             <textarea className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white" placeholder="Descripción (opcional)" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
+            
+            {/* 🆕 INPUT DE ETIQUETAS */}
+            <TagInput selectedTags={selectedTags} onChange={setSelectedTags} />
+
             <button type="submit" className="w-full bg-pink-600 text-white py-2 rounded-lg font-bold hover:bg-pink-500 transition disabled:opacity-50" disabled={loading}>
               {loading ? "Subiendo..." : "Subir captura"}
             </button>

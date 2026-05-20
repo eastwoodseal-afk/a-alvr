@@ -9,6 +9,13 @@ import UserProfileOverlay from "../components/UserProfileOverlay";
 import PublicCollectionOverlay from "../components/PublicCollectionOverlay";
 import DisapproveShotModal from "../components/DisapproveShotModal";
 
+interface Tag {
+  id: number;
+  name: string;
+  slug: string;
+  facet: string;
+}
+
 interface Shot { 
   id: string; 
   title?: string; 
@@ -20,7 +27,8 @@ interface Shot {
   username?: string; 
   uoc_id?: string; 
   uoc_username?: string; 
-  category_id?: number | null; // 🔧 Acepta null de Supabase
+  category_id?: number | null; 
+  tags?: Tag[]; 
 }
 
 const BATCH_SIZE = 20;
@@ -55,40 +63,42 @@ export default function Home() {
   const [disapprovingId, setDisapprovingId] = useState<string | null>(null);
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
 
-     // 🆕 ESTADO: Toggle de vista (Mosaico vs Feed)
   const [isSingleColumn, setIsSingleColumn] = useState(false);
 
-  // 🆕 Escuchar evento del Footer (Grid View)
   useEffect(() => {
-    const handleGridView = (e: any) => {
-      setIsSingleColumn(e.detail || false);
-    };
+    const handleGridView = (e: any) => setIsSingleColumn(e.detail || false);
     window.addEventListener('grid-view-changed', handleGridView);
     return () => window.removeEventListener('grid-view-changed', handleGridView);
   }, []);
 
-  // 🆕 NUEVO: Estado del filtro de categoría
   const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [tagFilter, setTagFilter] = useState<string>("");
+  const [tagFilterName, setTagFilterName] = useState<string>(""); // 🆕 Para mostrar el nombre
 
-  // 🆕 NUEVO: Escuchar evento del Footer
   useEffect(() => {
-    const handleCategoryFilter = (e: any) => {
-      const newFilter = e.detail || "";
-      setCategoryFilter(newFilter);
-    };
+    const handleCategoryFilter = (e: any) => setCategoryFilter(e.detail || "");
     window.addEventListener('category-filter-changed', handleCategoryFilter);
     return () => window.removeEventListener('category-filter-changed', handleCategoryFilter);
   }, []);
 
-  // 🆕 NUEVO: Cuando cambia el filtro, resetear y re-fetch
+  // 🆕 ESCUCHAR EVENTO DE FILTRO DE TAGS (Recibe ID y Nombre)
+  useEffect(() => {
+    const handleTagFilter = (e: any) => {
+      setTagFilter(e.detail?.id || "");
+      setTagFilterName(e.detail?.name || "");
+    };
+    window.addEventListener('tag-filter-changed', handleTagFilter);
+    return () => window.removeEventListener('tag-filter-changed', handleTagFilter);
+  }, []);
+
   useEffect(() => {
     setShots([]);
     setPage(0);
     setHasMore(true);
-    fetchApprovedShots(0, categoryFilter);
-  }, [categoryFilter]);
+    fetchApprovedShots(0, categoryFilter, tagFilter);
+  }, [categoryFilter, tagFilter]);
 
-  const fetchApprovedShots = useCallback(async (pageNum: number, catFilter?: string) => {
+  const fetchApprovedShots = useCallback(async (pageNum: number, catFilter?: string, tagFilterId?: string) => {
     if (isFetchingRef.current) return; 
     isFetchingRef.current = true;
     setLoading(true);
@@ -96,17 +106,21 @@ export default function Home() {
     const start = pageNum * BATCH_SIZE;
     const end = start + BATCH_SIZE - 1;
 
+    const selectQuery = tagFilterId 
+      ? `id, title, image_url, author, likes_count, views_count, user_id, uoc_id, uoc_username, category_id, profiles!shots_user_id_fkey ( username ), shot_tags!inner ( tags ( id, name, slug, facet ) )`
+      : `id, title, image_url, author, likes_count, views_count, user_id, uoc_id, uoc_username, category_id, profiles!shots_user_id_fkey ( username ), shot_tags ( tags ( id, name, slug, facet ) )`;
+
     let query = supabase
       .from('shots')
-      .select(`
-        id, title, image_url, author, likes_count, views_count, user_id, uoc_id, uoc_username, 
-        profiles!shots_user_id_fkey ( username )
-      `)
+      .select(selectQuery)
       .eq('is_approved', true);
 
-    // 🆕 NUEVO: Aplicar filtro de categoría si existe
     if (catFilter) {
       query = query.eq('category_id', parseInt(catFilter));
+    }
+
+    if (tagFilterId) {
+      query = query.eq('shot_tags.tag_id', parseInt(tagFilterId));
     }
 
     query = query.order('created_at', { ascending: false }).range(start, end);
@@ -114,7 +128,13 @@ export default function Home() {
     const { data, error } = await query;
 
     if (!error && data) {
-      const processed = data.map((s: any) => ({ ...s, id: String(s.id), username: s.profiles?.username || "Anónimo" }));
+      const processed = data.map((s: any) => ({
+        ...s,
+        id: String(s.id),
+        username: s.profiles?.username || "Anónimo",
+        tags: s.shot_tags?.map((st: any) => st.tags).filter(Boolean) || []
+      }));
+      
       const shuffled = shuffleArray(processed);
       
       if (pageNum === 0) setShots(shuffled);
@@ -131,12 +151,10 @@ export default function Home() {
   useEffect(() => {
     async function fetchUserInteractions() {
       if (!user?.id) { setSavedShots([]); setLikedShots([]); return; }
-      
       const [savedRes, likedRes] = await Promise.all([
         supabase.from("saved_shots").select("shot_id").eq("user_id", user.id),
         supabase.from("likes").select("shot_id").eq("user_id", user.id)
       ]);
-
       if (savedRes.data) setSavedShots(savedRes.data.map((s: any) => String(s.shot_id)));
       if (likedRes.data) setLikedShots(likedRes.data.map((l: any) => String(l.shot_id)));
     }
@@ -155,9 +173,7 @@ export default function Home() {
     if (!user?.id) return;
     const alreadyLiked = likedShots.includes(shotId);
     setLikingId(shotId);
-
     setShots(prev => prev.map(s => s.id === shotId ? { ...s, likes_count: (s.likes_count || 0) + (alreadyLiked ? -1 : 1) } : s));
-    
     if (alreadyLiked) {
       setLikedShots(prev => prev.filter(id => id !== shotId));
       await supabase.from("likes").delete().match({ user_id: user.id, shot_id: shotId });
@@ -181,143 +197,110 @@ export default function Home() {
   const executeDisapprove = async (shotId: string, reason: string) => {
     setDisapprovingId(shotId);
     try {
-      const { error } = await supabase
-        .from('shots')
-        .update({ is_approved: false, disapproval_reason: reason })
-        .eq('id', shotId);
+      const { error } = await supabase.from('shots').update({ is_approved: false, disapproval_reason: reason }).eq('id', shotId);
       if (!error) {
         setShots(prev => prev.filter(s => s.id !== shotId));
-      } else {
-        alert("Error al desaprobar el shot.");
-      }
-    } catch (err) {
-      console.error("Error desaprobando:", err);
-    } finally {
-      setDisapprovingId(null);
-      setConfirmDisapproveId(null);
-    }
+      } else { alert("Error al desaprobar el shot."); }
+    } catch (err) { console.error("Error desaprobando:", err); } 
+    finally { setDisapprovingId(null); setConfirmDisapproveId(null); }
   };
 
   const loadMore = useCallback(() => {
     if (hasMore && !isFetchingRef.current) {
       const nextPage = page + 1;
       setPage(nextPage);
-      fetchApprovedShots(nextPage, categoryFilter);
+      fetchApprovedShots(nextPage, categoryFilter, tagFilter);
     }
-  }, [page, hasMore, fetchApprovedShots, categoryFilter]);
+  }, [page, hasMore, fetchApprovedShots, categoryFilter, tagFilter]);
   
   const sentinelRef = useInfiniteScroll(loadMore, loading);
 
+      // 🆕 ESCUCHAR APERTURA DESDE LINK COMPARTIDO (Ej: ?open_shot=123)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const openShotId = params.get('open_shot');
+    
+    if (openShotId) {
+      const existingShot = shots.find(s => s.id === openShotId);
+      if (existingShot) {
+        setSelectedShot(existingShot);
+      } else {
+        supabase.from('shots').select(`id, title, image_url, author, likes_count, views_count, user_id, uoc_id, uoc_username, category_id, profiles!shots_user_id_fkey ( username ), shot_tags ( tags ( id, name, slug, facet ) )`).eq('id', openShotId).single().then(({ data }) => {
+          if (data) {
+            // 🛠️ FIX: Forzar tipado any para evitar errores de Supabase en Build
+            const d = data as any;
+            const processed = { ...d, id: String(d.id), username: d.profiles?.username || "Anónimo", tags: d.shot_tags?.map((st: any) => st.tags).filter(Boolean) || [] };
+            setSelectedShot(processed);
+          }
+        });
+      }
+      window.history.replaceState({}, '', '/');
+    }
+  }, []);
+
   return (
     <section className="flex w-full">
-        
-
-
       <div className="flex-1 p-2 overflow-y-auto">
         
-        {/* 🆕 NUEVO: Indicador de filtro activo */}
-        {categoryFilter && (
-          <div className="mb-4 flex items-center justify-center gap-2">
+        {(categoryFilter || tagFilter) && (
+          <div className="mb-4 flex items-center justify-center gap-2 flex-wrap">
             <span className="text-xs text-gray-400">Filtrando por:</span>
-            <span className="px-3 py-1 bg-yellow-500 text-black rounded-full text-xs font-bold">
-              {categoryFilter}
-            </span>
-            <button 
-              onClick={() => {
-                setCategoryFilter("");
-                window.dispatchEvent(new CustomEvent('category-filter-changed', { detail: "" }));
-              }}
-              className="text-xs text-gray-500 hover:text-white transition"
-            >
-              ✕ Quitar filtro
-            </button>
+            
+            {categoryFilter && (
+              <span className="px-3 py-1 bg-blue-500 text-white rounded-full text-xs font-bold flex items-center gap-1">
+                Categoría
+                <button onClick={() => { setCategoryFilter(""); window.dispatchEvent(new CustomEvent('category-filter-changed', { detail: "" })); }} className="ml-1 hover:text-gray-200">✕</button>
+              </span>
+            )}
+
+            {tagFilter && (
+              <span className="px-3 py-1 bg-purple-500 text-white rounded-full text-xs font-bold flex items-center gap-1">
+                Tag: {tagFilterName}
+                <button onClick={() => { setTagFilter(""); setTagFilterName(""); window.dispatchEvent(new CustomEvent('tag-filter-changed', { detail: { id: "", name: "" } })); }} className="ml-1 hover:text-gray-200">✕</button>
+              </span>
+            )}
+
+            <button onClick={() => { 
+              setCategoryFilter(""); setTagFilter(""); setTagFilterName("");
+              window.dispatchEvent(new CustomEvent('category-filter-changed', { detail: "" }));
+              window.dispatchEvent(new CustomEvent('tag-filter-changed', { detail: { id: "", name: "" } }));
+            }} className="text-xs text-gray-500 hover:text-white transition">Quitar todo</button>
           </div>
         )}
         
         {loading && shots.length === 0 && <p className="text-center py-8 text-gray-400 animate-pulse">Cargando Ateneo...</p>}
 
-                        <div className={`${isSingleColumn ? 'columns-1 max-w-xl mx-auto' : 'columns-2 md:columns-3 lg:columns-4 xl:columns-6'} gap-2 w-full`}>
+        <div className={`${isSingleColumn ? 'columns-1 max-w-xl mx-auto' : 'columns-2 md:columns-3 lg:columns-4 xl:columns-6'} gap-2 w-full`}>
           {shots.map(shot => (
             <ShotCard 
-              key={shot.id} 
-              shot={shot} 
-              isSaved={savedShots.includes(String(shot.id))} 
-              isSaving={savingId === shot.id} 
-              onSave={() => handleSave(shot.id)}
-              isLiked={likedShots.includes(String(shot.id))}
-              likesCount={shot.likes_count || 0}
-              isLiking={likingId === shot.id}
-              onLike={() => handleLike(shot.id)}
-              viewsCount={shot.views_count || 0}
-              user={user}
-              onClick={() => setSelectedShot(shot)}
-              isAdmin={isAdmin}
-              onDisapprove={handleDisapproveRequest}
-              isDisapproving={disapprovingId === shot.id}
+              key={shot.id} shot={shot} isSaved={savedShots.includes(String(shot.id))} isSaving={savingId === shot.id} onSave={() => handleSave(shot.id)}
+              isLiked={likedShots.includes(String(shot.id))} likesCount={shot.likes_count || 0} isLiking={likingId === shot.id} onLike={() => handleLike(shot.id)}
+              viewsCount={shot.views_count || 0} user={user} onClick={() => setSelectedShot(shot)}
+              isAdmin={isAdmin} onDisapprove={handleDisapproveRequest} isDisapproving={disapprovingId === shot.id}
             />
           ))}
         </div>
 
         {loading && shots.length > 0 && <div className="text-center py-4 text-gray-500 animate-pulse">Cargando más...</div>}
         {!hasMore && !loading && shots.length > 0 && <div className="text-center py-4 text-gray-600 text-sm">Fin del muro.</div>}
-        {!hasMore && !loading && shots.length === 0 && categoryFilter && <div className="text-center py-8 text-gray-600 text-sm">No hay shots en esta categoría.</div>}
+        {!hasMore && !loading && shots.length === 0 && (categoryFilter || tagFilter) && <div className="text-center py-8 text-gray-600 text-sm">No hay shots para esta combinación de filtros.</div>}
 
         <div ref={sentinelRef} className="h-1 w-full"></div>
       </div>
 
-            {/* MODAL DE DETALLE CON MODO CURADURÍA */}
       {selectedShot && ( 
         <ShotDetailModal 
-          shot={selectedShot} 
-          onClose={() => setSelectedShot(null)} 
-          isSaved={savedShots.includes(selectedShot.id)} 
-          isSaving={savingId === selectedShot.id} 
-          onSave={() => handleSave(selectedShot.id)} 
-          user={user} 
-          isLiked={likedShots.includes(selectedShot.id)} 
-          likesCount={selectedShot.likes_count || 0} 
-          onLike={() => handleLike(selectedShot.id)} 
-          viewsCount={selectedShot.views_count || 0} 
-          onView={handleView}
-          onOpenCollection={(uocId) => {
-            setSelectedShot(null);
-            setSelectedCollectionId(uocId);
-          }}
-          // 🆕 PROPS DE CURADURÍA (ADMIN)
-          onShotUpdated={(updatedShot) => {
-            setShots(prev => prev.map(s => s.id === updatedShot.id ? updatedShot : s));
-          }}
-          onDisapprove={(shotId) => {
-            handleDisapproveRequest(shotId);
-            setSelectedShot(null);
-          }}
+          shot={selectedShot} onClose={() => setSelectedShot(null)} isSaved={savedShots.includes(selectedShot.id)} isSaving={savingId === selectedShot.id} onSave={() => handleSave(selectedShot.id)} 
+          user={user} isLiked={likedShots.includes(selectedShot.id)} likesCount={selectedShot.likes_count || 0} onLike={() => handleLike(selectedShot.id)} viewsCount={selectedShot.views_count || 0} onView={handleView}
+          onOpenCollection={(uocId) => { setSelectedShot(null); setSelectedCollectionId(uocId); }}
+          onShotUpdated={(updatedShot) => setShots(prev => prev.map(s => s.id === updatedShot.id ? updatedShot : s))}
+          onDisapprove={(shotId) => { handleDisapproveRequest(shotId); setSelectedShot(null); }}
         /> 
       )}
 
-      {selectedProfileId && ( 
-        <UserProfileOverlay 
-          userId={selectedProfileId} 
-          onClose={() => setSelectedProfileId(null)} 
-        /> 
-      )}
-
-      {selectedCollectionId && ( 
-        <PublicCollectionOverlay 
-          userId={selectedCollectionId} 
-          onClose={() => setSelectedCollectionId(null)} 
-        /> 
-      )}
-
-      {confirmDisapproveId && (
-        <DisapproveShotModal 
-          shotId={confirmDisapproveId}
-          shotTitle={shots.find(s => s.id === confirmDisapproveId)?.title}
-          onConfirm={executeDisapprove}
-          onClose={() => setConfirmDisapproveId(null)}
-          loading={!!disapprovingId}
-        />
-      )}
-
+      {selectedProfileId && ( <UserProfileOverlay userId={selectedProfileId} onClose={() => setSelectedProfileId(null)} /> )}
+      {selectedCollectionId && ( <PublicCollectionOverlay userId={selectedCollectionId} onClose={() => setSelectedCollectionId(null)} /> )}
+      {confirmDisapproveId && ( <DisapproveShotModal shotId={confirmDisapproveId} shotTitle={shots.find(s => s.id === confirmDisapproveId)?.title} onConfirm={executeDisapprove} onClose={() => setConfirmDisapproveId(null)} loading={!!disapprovingId} /> )}
     </section>
   );
 }

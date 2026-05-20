@@ -11,6 +11,9 @@ export default function AdminCategoryManager() {
   const [form, setForm] = useState({ name: "", slug: "" });
   const [saving, setSaving] = useState(false);
 
+  // 🆕 CIRUGÍA: Estado para confirmación estilizada (Adiós window.confirm)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
   useEffect(() => { fetchCategories(); }, []);
 
   const fetchCategories = async () => {
@@ -42,10 +45,11 @@ export default function AdminCategoryManager() {
 
   const handleEdit = (cat: Category) => { setEditingId(cat.id); setForm({ name: cat.name, slug: cat.slug }); };
   
+  // 🆕 CIRUGÍA: Eliminación en 2 pasos sin ventanas del sistema
   const handleDelete = async (id: number) => {
-    if (!confirm("¿Eliminar categoría?")) return;
     await supabase.from('categories').delete().eq('id', id);
     await fetchCategories();
+    setConfirmDeleteId(null); // Resetear estado
   };
 
   if (loading) return <div className="text-center py-8 text-gray-400 animate-pulse">Cargando categorías...</div>;
@@ -73,9 +77,34 @@ export default function AdminCategoryManager() {
               <span className="text-white font-medium">{cat.name}</span>
               <span className="text-gray-500 text-xs ml-2">({cat.slug})</span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <button onClick={() => handleEdit(cat)} className="text-xs text-blue-400 hover:underline">Editar</button>
-              <button onClick={() => handleDelete(cat.id)} className="text-xs text-red-400 hover:underline">Eliminar</button>
+              
+              {/* 🆕 CIRUGÍA: Botón con confirmación estilizada inline */}
+              {confirmDeleteId === cat.id ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-red-400 font-bold">¿Seguro?</span>
+                  <button 
+                    onClick={() => handleDelete(cat.id)} 
+                    className="text-xs bg-red-600 hover:bg-red-500 text-white font-bold px-2 py-0.5 rounded transition"
+                  >
+                    Sí
+                  </button>
+                  <button 
+                    onClick={() => setConfirmDeleteId(null)} 
+                    className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-bold px-2 py-0.5 rounded transition"
+                  >
+                    No
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => setConfirmDeleteId(cat.id)} 
+                  className="text-xs text-red-400 hover:underline"
+                >
+                  Eliminar
+                </button>
+              )}
             </div>
           </div>
         ))}

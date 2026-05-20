@@ -12,6 +12,9 @@ export default function AdminUserManager({ currentUserId }: Props) {
   const [loadingAdmins, setLoadingAdmins] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
+  // 🆕 CIRUGÍA: Estado de confirmación estilizada
+  const [confirmDemoteId, setConfirmDemoteId] = useState<string | null>(null);
+
   useEffect(() => { fetchAdmins(); }, []);
 
   const fetchAdmins = async () => {
@@ -31,31 +34,22 @@ export default function AdminUserManager({ currentUserId }: Props) {
 
    const handlePromote = async (userId: string, newRole: string) => {
     setProcessingId(userId);
-    
-    // 1. Actualizar rol
     await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
-    
-    // 2. 🆕 Notificar al usuario
     await supabase.from('notifications').insert({
-      user_id: userId,
-      title: '🎉 ¡Nuevo Rol!',
-      message: `Has sido promovido a ${newRole}.`,
-      type: 'role_promotion',
-      read: false
+      user_id: userId, title: '🎉 ¡Nuevo Rol!', message: `Has sido promovido a ${newRole}.`, type: 'role_promotion', read: false
     });
-    
-    // 3. Actualizar UI
     setSearchResults(prev => prev.filter(u => u.id !== userId));
     await fetchAdmins();
     setProcessingId(null);
   };
 
+  // 🆕 CIRUGÍA: Degradación directa, sin confirm() del sistema
   const handleDemote = async (userId: string) => {
-    if (userId === currentUserId) return alert("No puedes degradarte a ti mismo.");
-    if (!confirm("¿Degradar a Miembro?")) return;
+    if (userId === currentUserId) return;
     setProcessingId(userId);
     await supabase.from('profiles').update({ role: 'member' }).eq('id', userId);
     setAdmins(prev => prev.filter(u => u.id !== userId));
+    setConfirmDemoteId(null); // Resetear
     setProcessingId(null);
   };
 
@@ -96,8 +90,18 @@ export default function AdminUserManager({ currentUserId }: Props) {
                   <span className="text-white font-semibold">@{admin.username}</span>
                   <span className={`text-xs ml-2 px-1.5 py-0.5 rounded ${admin.role === 'superadmin' ? 'bg-purple-600 text-white' : 'bg-gray-600 text-gray-200'}`}>{admin.role}</span>
                 </div>
+                
                 {admin.id !== currentUserId && admin.role !== 'superadmin' && (
-                  <button onClick={() => handleDemote(admin.id)} disabled={processingId === admin.id} className="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded transition disabled:opacity-50">Degradar</button>
+                  // 🆕 CIRUGÍA: Botón de degradar con confirmación inline
+                  confirmDemoteId === admin.id ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-red-400 font-bold">¿Seguro?</span>
+                      <button onClick={() => handleDemote(admin.id)} disabled={processingId === admin.id} className="text-xs bg-red-600 hover:bg-red-500 text-white font-bold px-2 py-0.5 rounded transition disabled:opacity-50">Sí</button>
+                      <button onClick={() => setConfirmDemoteId(null)} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-bold px-2 py-0.5 rounded transition">No</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setConfirmDemoteId(admin.id)} disabled={processingId === admin.id} className="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded transition disabled:opacity-50">Degradar</button>
+                  )
                 )}
               </div>
             ))}
