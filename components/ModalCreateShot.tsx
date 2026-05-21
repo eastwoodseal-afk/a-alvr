@@ -4,7 +4,7 @@ import axios from "axios";
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from "../lib/AuthContext";
 import TagInput from "./TagInput";
-import { Tag, saveShotTags } from "../lib/tagUtils"; // 🆕 IMPORT
+import { saveShotTags, autoTagAuthor, Tag } from "../lib/tagUtils"; // 🆕 IMPORT
 
 interface ModalCreateShotProps {
   open: boolean;
@@ -26,7 +26,6 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
   const [description, setDescription] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   
-  // 🆕 ESTADO DE TAGS
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
 
   const [multiFiles, setMultiFiles] = useState<File[]>([]);
@@ -45,7 +44,7 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
     onClose();
     setError(null); setSuccess(null);
     setFile(null); setTitle(""); setArchitect(""); setDescription(""); setPreviewUrl(null);
-    setSelectedTags([]); // 🆕 Limpiar tags
+    setSelectedTags([]);
     setMultiFiles([]); setMultiLoading(false);
     setSiteUrl(""); setSiteImages([]); setSelectedImages([]); setShowImagesOverlay(false);
     setImportProgress({ current: 0, total: 0 });
@@ -75,12 +74,14 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
       
       const shotData = { user_id: user.id, title, description, image_url: publicData.publicUrl, author: architect.trim() || null };
       
-      // 🆕 AÑADIDO .select('id').single() para obtener el ID del shot recién creado
       const { data: newShot, error: insertError } = await supabase.from('shots').insert(shotData).select('id').single();
       if (insertError) throw insertError;
       
-      // 🆕 GUARDAR TAGS
-      if (newShot) await saveShotTags(newShot.id.toString(), selectedTags);
+      if (newShot) {
+        await saveShotTags(newShot.id.toString(), selectedTags);
+        // 🆕 AUTO-TAG AUTOR
+        if (architect.trim()) await autoTagAuthor(architect.trim(), newShot.id.toString());
+      }
 
       setSuccess("Shot subido correctamente.");
       setTimeout(() => handleClose(), 1500);
@@ -103,10 +104,12 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
         const shotData = { user_id: user.id, title: fileItem.name, description: '', image_url: data.publicUrl, author: architect.trim() || null };
         const { data: newShot } = await supabase.from('shots').insert(shotData).select('id').single();
         
-        // 🆕 GUARDAR TAGS (Se aplican a todos los del lote)
-        if (newShot) await saveShotTags(newShot.id.toString(), selectedTags);
-        
-        successCount++;
+        if (newShot) {
+          await saveShotTags(newShot.id.toString(), selectedTags);
+          // 🆕 AUTO-TAG AUTOR
+          if (architect.trim()) await autoTagAuthor(architect.trim(), newShot.id.toString());
+          successCount++;
+        }
       } catch { errorCount++; }
     }
     if (successCount) setSuccess(`${successCount} subidos.`);
@@ -142,10 +145,12 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
           const shotData = { user_id: user.id, title: img.originalUrl.split("/").pop() || "Imagen web", description: '', image_url: img.publicUrl, source_url: img.originalUrl, author: architect.trim() || null };
           const { data: newShot } = await supabase.from('shots').insert(shotData).select('id').single();
           
-          // 🆕 GUARDAR TAGS
-          if (newShot) await saveShotTags(newShot.id.toString(), selectedTags);
-          
-          successCount++;
+          if (newShot) {
+            await saveShotTags(newShot.id.toString(), selectedTags);
+            // 🆕 AUTO-TAG AUTOR
+            if (architect.trim()) await autoTagAuthor(architect.trim(), newShot.id.toString());
+            successCount++;
+          }
         } else { errorCount++; }
       } catch { errorCount++; }
       if (i < selectedImages.length - 1) { await new Promise(resolve => setTimeout(resolve, 500)); }
@@ -181,10 +186,7 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
             <input type="text" className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white" placeholder="Título (Obligatorio)" value={title} onChange={e => setTitle(e.target.value)} required />
             <input type="text" className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white" placeholder="Arquitecto / Estudio" value={architect} onChange={e => setArchitect(e.target.value)} />
             <textarea className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white" placeholder="Descripción (opcional)" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
-            
-            {/* 🆕 INPUT DE ETIQUETAS */}
             <TagInput selectedTags={selectedTags} onChange={setSelectedTags} />
-
             <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-500 transition disabled:opacity-50" disabled={loading}>
               {loading ? "Subiendo..." : "Subir archivo"}
             </button>
@@ -209,10 +211,7 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
               </div>
             )}
             <input type="text" className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white" placeholder="Arquitecto / Estudio (Se aplica a todos)" value={architect} onChange={e => setArchitect(e.target.value)} />
-            
-            {/* 🆕 INPUT DE ETIQUETAS (Se aplica a todos) */}
             <TagInput selectedTags={selectedTags} onChange={setSelectedTags} />
-
             <button type="submit" className="w-full bg-green-600 text-white py-2 rounded-lg font-bold hover:bg-green-500 transition disabled:opacity-50" disabled={multiLoading}>
               {multiLoading ? `Subiendo... (${multiFiles.length})` : `Subir ${multiFiles.length || ''} archivos`}
             </button>
@@ -242,11 +241,7 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
                   </div>
                   
                   <input type="text" className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm mb-4" placeholder="Arquitecto / Estudio (Se aplica a todos)" value={architect} onChange={e => setArchitect(e.target.value)} />
-                  
-                  {/* 🆕 INPUT DE ETIQUETAS (Se aplica a todos) */}
-                  <div className="w-full mb-4">
-                    <TagInput selectedTags={selectedTags} onChange={setSelectedTags} />
-                  </div>
+                  <div className="w-full mb-4"><TagInput selectedTags={selectedTags} onChange={setSelectedTags} /></div>
 
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4 w-full mb-4 overflow-y-auto">
                     {siteImages.map((img, idx) => (
@@ -282,10 +277,7 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
             <input type="text" className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white" placeholder="Título (Obligatorio)" value={title} onChange={e => setTitle(e.target.value)} required />
             <input type="text" className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white" placeholder="Arquitecto / Estudio" value={architect} onChange={e => setArchitect(e.target.value)} />
             <textarea className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white" placeholder="Descripción (opcional)" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
-            
-            {/* 🆕 INPUT DE ETIQUETAS */}
             <TagInput selectedTags={selectedTags} onChange={setSelectedTags} />
-
             <button type="submit" className="w-full bg-pink-600 text-white py-2 rounded-lg font-bold hover:bg-pink-500 transition disabled:opacity-50" disabled={loading}>
               {loading ? "Subiendo..." : "Subir captura"}
             </button>

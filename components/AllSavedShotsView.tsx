@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import ShotCard from "./ShotCard";
 import ShotDetailModal from "./ShotDetailModal";
+import PublicCollectionOverlay from "./PublicCollectionOverlay"; // 🆕 IMPORT
 import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
 
 const BATCH_SIZE = 20;
@@ -12,7 +13,7 @@ interface Shot { id: string; image_url: string; title?: string; description?: st
 
 interface Props {
   userId: string | null | undefined;
-  isOwner: boolean; // NUEVO: ¿Es mi vitrina o la de otro?
+  isOwner: boolean;
 }
 
 export default function AllSavedShotsView({ userId, isOwner }: Props) {
@@ -25,6 +26,9 @@ export default function AllSavedShotsView({ userId, isOwner }: Props) {
 
   const [savedShots, setSavedShots] = useState<string[]>([]);
   const [likedShots, setLikedShots] = useState<string[]>([]);
+
+  // 🆕 ESTADO PARA VITRINA UOC
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
 
   const fetchShots = useCallback(async (pageNum: number) => {
     if (!userId || loading) return; 
@@ -48,7 +52,6 @@ export default function AllSavedShotsView({ userId, isOwner }: Props) {
       .order("created_at", { ascending: false })
       .range(start, end);
 
-    // LÓGICA DE PRIVACIDAD: Si no es el dueño, solo ver shots aprobados
     if (!isOwner) {
       query = query.eq("shots.is_approved", true);
     }
@@ -57,7 +60,7 @@ export default function AllSavedShotsView({ userId, isOwner }: Props) {
 
     if (!error && data) {
       const processedShots = (data || [])
-        .filter((item: any) => item.shots !== null) // Limpiar huérfanos
+        .filter((item: any) => item.shots !== null)
         .map((item: any) => {
           const bs = item.shots?.board_shots && item.shots.board_shots.length > 0 
             ? item.shots.board_shots[0] 
@@ -160,20 +163,29 @@ export default function AllSavedShotsView({ userId, isOwner }: Props) {
 
       <div ref={sentinelRef} className="h-1 w-full"></div>
 
+      {/* 🆕 MODAL DETALLE CORREGIDO */}
       {selectedShot && currentUser && (
         <ShotDetailModal 
           shot={selectedShot}
           onClose={() => setSelectedShot(null)}
-          isSaved={savedShots.includes(selectedShot.id)}
-          isSaving={false}
-          onSave={() => {}}
           user={currentUser}
-          isLiked={likedShots.includes(selectedShot.id)}
-          likesCount={selectedShot.likes_count || 0}
-          onLike={() => handleLike(selectedShot.id)}
-          viewsCount={selectedShot.views_count || 0}
-          onView={() => handleView(selectedShot.id)}
+          initialIsLiked={likedShots.includes(selectedShot.id)}
+          initialIsSaved={true}
+          initialLikesCount={selectedShot.likes_count || 0}
+          onLikeChange={(newIsLiked, newCount) => {
+            setLikedShots(prev => newIsLiked ? [...prev, selectedShot.id] : prev.filter(id => id !== selectedShot.id));
+            setShots(prev => prev.map(s => s.id === selectedShot.id ? { ...s, likes_count: newCount } : s));
+          }}
+          onSaveChange={(newIsSaved) => {
+            if(newIsSaved) setSavedShots(prev => [...prev, selectedShot.id]);
+          }}
+          onOpenCollection={(uocId) => { setSelectedShot(null); setSelectedCollectionId(uocId); }}
         />
+      )}
+
+      {/* 🆕 VITRINA UOC */}
+      {selectedCollectionId && (
+        <PublicCollectionOverlay userId={selectedCollectionId} onClose={() => setSelectedCollectionId(null)} />
       )}
     </>
   );

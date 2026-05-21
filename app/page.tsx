@@ -8,17 +8,13 @@ import ShotDetailModal from "../components/ShotDetailModal";
 import UserProfileOverlay from "../components/UserProfileOverlay";
 import PublicCollectionOverlay from "../components/PublicCollectionOverlay";
 import DisapproveShotModal from "../components/DisapproveShotModal";
+import { Tag } from "../lib/tagUtils";
 
-interface Tag {
-  id: number;
-  name: string;
-  slug: string;
-  facet: string;
-}
 
 interface Shot { 
   id: string; 
   title?: string; 
+  description?: string; 
   image_url: string; 
   author?: string; 
   likes_count?: number; 
@@ -28,6 +24,9 @@ interface Shot {
   uoc_id?: string; 
   uoc_username?: string; 
   category_id?: number | null; 
+  category_name?: string; 
+  category_slug?: string; 
+  source_url?: string;    
   tags?: Tag[]; 
 }
 
@@ -73,7 +72,7 @@ export default function Home() {
 
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [tagFilter, setTagFilter] = useState<string>("");
-  const [tagFilterName, setTagFilterName] = useState<string>(""); // 🆕 Para mostrar el nombre
+  const [tagFilterName, setTagFilterName] = useState<string>("");
 
   useEffect(() => {
     const handleCategoryFilter = (e: any) => setCategoryFilter(e.detail || "");
@@ -81,7 +80,6 @@ export default function Home() {
     return () => window.removeEventListener('category-filter-changed', handleCategoryFilter);
   }, []);
 
-  // 🆕 ESCUCHAR EVENTO DE FILTRO DE TAGS (Recibe ID y Nombre)
   useEffect(() => {
     const handleTagFilter = (e: any) => {
       setTagFilter(e.detail?.id || "");
@@ -107,8 +105,8 @@ export default function Home() {
     const end = start + BATCH_SIZE - 1;
 
     const selectQuery = tagFilterId 
-      ? `id, title, image_url, author, likes_count, views_count, user_id, uoc_id, uoc_username, category_id, profiles!shots_user_id_fkey ( username ), shot_tags!inner ( tags ( id, name, slug, facet ) )`
-      : `id, title, image_url, author, likes_count, views_count, user_id, uoc_id, uoc_username, category_id, profiles!shots_user_id_fkey ( username ), shot_tags ( tags ( id, name, slug, facet ) )`;
+      ? `id, title, description, image_url, author, likes_count, views_count, user_id, uoc_id, uoc_username, category_id, source_url, profiles!shots_user_id_fkey ( username ), categories ( name, slug ), shot_tags!inner ( tags ( id, name, slug, facet ) )`
+      : `id, title, description, image_url, author, likes_count, views_count, user_id, uoc_id, uoc_username, category_id, source_url, profiles!shots_user_id_fkey ( username ), categories ( name, slug ), shot_tags ( tags ( id, name, slug, facet ) )`;
 
     let query = supabase
       .from('shots')
@@ -132,7 +130,10 @@ export default function Home() {
         ...s,
         id: String(s.id),
         username: s.profiles?.username || "Anónimo",
-        tags: s.shot_tags?.map((st: any) => st.tags).filter(Boolean) || []
+        tags: s.shot_tags?.map((st: any) => st.tags).filter(Boolean) || [],
+        category_name: s.categories?.name || null,
+        category_slug: s.categories?.slug || null,
+        source_url: s.source_url || null
       }));
       
       const shuffled = shuffleArray(processed);
@@ -215,7 +216,6 @@ export default function Home() {
   
   const sentinelRef = useInfiniteScroll(loadMore, loading);
 
-      // 🆕 ESCUCHAR APERTURA DESDE LINK COMPARTIDO (Ej: ?open_shot=123)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const openShotId = params.get('open_shot');
@@ -225,11 +225,10 @@ export default function Home() {
       if (existingShot) {
         setSelectedShot(existingShot);
       } else {
-        supabase.from('shots').select(`id, title, image_url, author, likes_count, views_count, user_id, uoc_id, uoc_username, category_id, profiles!shots_user_id_fkey ( username ), shot_tags ( tags ( id, name, slug, facet ) )`).eq('id', openShotId).single().then(({ data }) => {
+        supabase.from('shots').select(`id, title, description, image_url, author, likes_count, views_count, user_id, uoc_id, uoc_username, category_id, source_url, profiles!shots_user_id_fkey ( username ), categories ( name, slug ), shot_tags ( tags ( id, name, slug, facet ) )`).eq('id', openShotId).single().then(({ data }) => {
           if (data) {
-            // 🛠️ FIX: Forzar tipado any para evitar errores de Supabase en Build
             const d = data as any;
-            const processed = { ...d, id: String(d.id), username: d.profiles?.username || "Anónimo", tags: d.shot_tags?.map((st: any) => st.tags).filter(Boolean) || [] };
+            const processed = { ...d, id: String(d.id), username: d.profiles?.username || "Anónimo", tags: d.shot_tags?.map((st: any) => st.tags).filter(Boolean) || [], category_name: d.categories?.name || null, category_slug: d.categories?.slug || null, source_url: d.source_url || null };
             setSelectedShot(processed);
           }
         });
@@ -288,15 +287,26 @@ export default function Home() {
         <div ref={sentinelRef} className="h-1 w-full"></div>
       </div>
 
-      {selectedShot && ( 
-        <ShotDetailModal 
-          shot={selectedShot} onClose={() => setSelectedShot(null)} isSaved={savedShots.includes(selectedShot.id)} isSaving={savingId === selectedShot.id} onSave={() => handleSave(selectedShot.id)} 
-          user={user} isLiked={likedShots.includes(selectedShot.id)} likesCount={selectedShot.likes_count || 0} onLike={() => handleLike(selectedShot.id)} viewsCount={selectedShot.views_count || 0} onView={handleView}
-          onOpenCollection={(uocId) => { setSelectedShot(null); setSelectedCollectionId(uocId); }}
-          onShotUpdated={(updatedShot) => setShots(prev => prev.map(s => s.id === updatedShot.id ? updatedShot : s))}
-          onDisapprove={(shotId) => { handleDisapproveRequest(shotId); setSelectedShot(null); }}
-        /> 
-      )}
+     
+
+{selectedShot && ( 
+  <ShotDetailModal 
+    shot={selectedShot} 
+    onClose={() => setSelectedShot(null)} 
+    user={user}
+    onLikeChange={(newIsLiked, newCount) => {
+      // Sincroniza el muro principal
+      setLikedShots(prev => newIsLiked ? [...prev, selectedShot.id] : prev.filter(id => id !== selectedShot.id));
+      setShots(prev => prev.map(s => s.id === selectedShot.id ? { ...s, likes_count: newCount } : s));
+    }}
+    onSaveChange={(newIsSaved) => {
+      if(newIsSaved) setSavedShots(prev => [...prev, selectedShot.id]);
+    }}
+    onOpenCollection={(uocId) => { setSelectedShot(null); setSelectedCollectionId(uocId); }}
+    onShotUpdated={(updatedShot) => setShots(prev => prev.map(s => s.id === updatedShot.id ? updatedShot : s))}
+    onDisapprove={(shotId) => { handleDisapproveRequest(shotId); setSelectedShot(null); }}
+  /> 
+)}
 
       {selectedProfileId && ( <UserProfileOverlay userId={selectedProfileId} onClose={() => setSelectedProfileId(null)} /> )}
       {selectedCollectionId && ( <PublicCollectionOverlay userId={selectedCollectionId} onClose={() => setSelectedCollectionId(null)} /> )}

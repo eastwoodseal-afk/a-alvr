@@ -2,9 +2,8 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabaseClient";
 import AdminShotDetailModal from "./AdminShotDetailModal";
+import { Tag } from "../lib/tagUtils";
 
-// 🆕 Añadimos la interfaz Tag
-interface Tag { id: number; name: string; slug: string; facet: string; }
 
 interface Shot {
   id: string; 

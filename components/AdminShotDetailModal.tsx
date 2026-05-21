@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabaseClient";
 import TagInput from "./TagInput";
-import { Tag, saveShotTags } from "../lib/tagUtils"; // 🆕 IMPORT
+import { Tag, saveShotTags, autoTagAuthor } from "../lib/tagUtils"; // 🆕 IMPORT
 
 interface Shot {
   id: string; image_url: string; title?: string; description?: string; author?: string; username?: string; tags?: Tag[];
@@ -25,7 +25,6 @@ export default function AdminShotDetailModal({ shot, onClose, onApprove, onRejec
   const [editLoading, setEditLoading] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
 
-  // 🆕 ESTADO DE TAGS (Inicializado con los tags que ya tenga el shot)
   const [selectedTags, setSelectedTags] = useState<Tag[]>(shot.tags || []);
 
   const [isAdding, setIsAdding] = useState(false);
@@ -62,8 +61,9 @@ export default function AdminShotDetailModal({ shot, onClose, onApprove, onRejec
       category_id: selectedCategory ? Number(selectedCategory) : null
     };
 
-    // 🆕 GUARDAR TAGS EN BD ANTES DE APROBAR
     await saveShotTags(shot.id, selectedTags);
+    // 🆕 AUTO-TAG AUTOR (Si el admin añadió o corrigió el autor)
+    if (editAuthor.trim()) await autoTagAuthor(editAuthor.trim(), shot.id);
 
     onApprove(shot.id, updatedData);
   };
@@ -120,7 +120,6 @@ export default function AdminShotDetailModal({ shot, onClose, onApprove, onRejec
               )}
             </div>
 
-            {/* 🆕 SECCIÓN DE ETIQUETAS (Red Nerviosa) */}
             <div>
               <label className="text-xs text-gray-400 block mb-1">Etiquetas (Tags):</label>
               <TagInput selectedTags={selectedTags} onChange={setSelectedTags} />

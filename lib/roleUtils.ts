@@ -6,7 +6,8 @@ export interface UserWithRole {
   id: string;
   email: string;
   username: string | null;
-  role: UserRole;
+  role: UserRole; // El rol efectivo (el que la app usa para renderizar)
+  actualRole: UserRole; // 🆕 El rol real (el que viene de la BD, inmutable)
   avatar_url: string | null;
 }
 

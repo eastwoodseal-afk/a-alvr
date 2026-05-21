@@ -1,14 +1,15 @@
 "use client";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useMemo } from "react";
 import { supabase } from "./supabaseClient";
 import { Session, User } from "@supabase/supabase-js";
-import { UserRole } from "./roleUtils"; // NUEVO: Importamos el tipo estricto
+import { UserRole } from "./roleUtils";
 
 interface LabUser {
   id: string;
   email: string;
   username: string | null;
-  role: UserRole; // ACTUALIZADO: De 'string' a UserRole
+  role: UserRole; 
+  actualRole: UserRole; // 🆕 El rol real
   avatar_url: string | null;
 }
 
@@ -16,42 +17,71 @@ const AuthContext = createContext<{
   session: Session | null, 
   user: LabUser | null,
   loading: boolean,
-  updateUsername: (newUsername: string) => void
+  updateUsername: (newUsername: string) => void,
+  isAdminMode: boolean, // 🆕 Estado del switch
+  toggleAdminMode: () => void // 🆕 Función del switch
 }>({ 
   session: null, 
   user: null,
   loading: true,
-  updateUsername: () => {}
+  updateUsername: () => {},
+  isAdminMode: true,
+  toggleAdminMode: () => {}
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<LabUser | null>(null);
+  const [rawProfile, setRawProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdminMode, setIsAdminMode] = useState(true); // 🆕 Por defecto activado
+
+  // 🆕 Cargar preferencia del localStorage al iniciar
+  useEffect(() => {
+    const savedMode = localStorage.getItem('aal-admin-mode');
+    if (savedMode === 'false') setIsAdminMode(false);
+  }, []);
 
   const fetchProfile = async (supabaseUser: User) => {
     const { data } = await supabase.from('profiles').select('username, role, avatar_url').eq('id', supabaseUser.id).single();
-    
-    const googleAvatar = supabaseUser.user_metadata?.avatar_url;
-    let avatarUrl = data?.avatar_url || googleAvatar || null;
-
-    if (data && !data.avatar_url && googleAvatar) {
-       await supabase.from('profiles').update({ avatar_url: googleAvatar }).eq('id', supabaseUser.id);
-       avatarUrl = googleAvatar; 
-    }
-
-    setUser({
-      id: supabaseUser.id,
-      email: supabaseUser.email || "",
-      username: data?.username || null,
-      role: (data?.role as UserRole) || 'subscriber', // CASTEO SEGURO
-      avatar_url: avatarUrl
-    });
+    setRawProfile(data); // Guardamos el perfil crudo
   };
 
   const updateUsername = (newUsername: string) => {
-    setUser(prev => prev ? { ...prev, username: newUsername } : null);
+    setRawProfile((prev: any) => prev ? { ...prev, username: newUsername } : null);
   };
+
+  // 🆕 EL SWITCH: Cambia el estado y lo guarda en localStorage
+  const toggleAdminMode = () => {
+    setIsAdminMode(prev => {
+      const next = !prev;
+      localStorage.setItem('aal-admin-mode', String(next));
+      return next;
+    });
+  };
+
+  // 🆕 DERIVACIÓN MÁGICA: Calcula el usuario en tiempo real según el switch
+  const user = useMemo(() => {
+    if (!session?.user) return null;
+    
+    const rawRole = (rawProfile?.role as UserRole) || 'subscriber';
+    
+    // Si es admin, pero el switch está apagado, se comporta como member
+    const effectiveRole = (rawRole === 'admin' || rawRole === 'superadmin') && !isAdminMode 
+                         ? 'member' 
+                         : rawRole;
+
+    const googleAvatar = session.user.user_metadata?.avatar_url;
+    let avatarUrl = rawProfile?.avatar_url || googleAvatar || null;
+
+    return {
+      id: session.user.id,
+      email: session.user.email || "",
+      username: rawProfile?.username || null,
+      role: effectiveRole, // La app ve este rol
+      actualRole: rawRole, // El switch ve este rol
+      avatar_url: avatarUrl
+    };
+  }, [session, rawProfile, isAdminMode]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -59,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         fetchProfile(session.user);
       } else {
-        setUser(null);
+        setRawProfile(null);
       }
       setLoading(false);
     });
@@ -73,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === 'SIGNED_IN' && session?.user) {
         fetchProfile(session.user);
       } else if (event === 'SIGNED_OUT') {
-        setUser(null);
+        setRawProfile(null);
       }
     });
 
@@ -81,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, updateUsername }}>
+    <AuthContext.Provider value={{ session, user, loading, updateUsername, isAdminMode, toggleAdminMode }}>
       {children}
     </AuthContext.Provider>
   );

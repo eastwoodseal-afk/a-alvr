@@ -7,27 +7,89 @@ export interface Tag {
   facet: string;
 }
 
+const generateSlug = (text: string) => text.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
+
+const getOrCreateTag = async (tag: Tag): Promise<number | null> => {
+  const { data: existing } = await supabase.from('tags').select('id').eq('slug', tag.slug).maybeSingle();
+  if (existing) return existing.id;
+
+  const { data: inserted, error } = await supabase
+    .from('tags')
+    .insert({ name: tag.name, slug: tag.slug, facet: tag.facet })
+    .select('id')
+    .maybeSingle();
+  
+  if (error) {
+    console.warn("⚠️ Fallback: Re-buscando tag tras error:", error.message || error);
+    const { data: retryExisting } = await supabase.from('tags').select('id').eq('slug', tag.slug).maybeSingle();
+    return retryExisting?.id || null;
+  }
+  
+  return inserted?.id || null;
+};
+
 export const saveShotTags = async (shotId: string, tags: Tag[]) => {
   if (!tags || tags.length === 0) return;
 
-  // 1. UPSERT: Asegurar que todos los tags existan en la tabla "tags" y obtener sus IDs
-  // Si es un tag libre nuevo, lo crea. Si ya existe (por el slug), solo obtiene el ID.
-  const { data: upsertedTags, error: upsertError } = await supabase
-    .from('tags')
-    .upsert(tags.map(t => ({ name: t.name, slug: t.slug, facet: t.facet })), { onConflict: 'slug', ignoreDuplicates: false })
-    .select('id');
+  const tagIds: number[] = [];
 
-  if (upsertError || !upsertedTags) {
-    console.error("Error guardando tags", upsertError);
+  for (const t of tags) {
+    const id = await getOrCreateTag(t);
+    if (id) tagIds.push(id);
+  }
+
+  if (tagIds.length === 0) return;
+
+  await supabase.from('shot_tags').delete().eq('shot_id', shotId);
+
+  const links = tagIds.map(tag_id => ({ shot_id: parseInt(shotId), tag_id }));
+  const { error: linkError } = await supabase.from('shot_tags').insert(links);
+  if (linkError) console.error("Error vinculando tags al shot", linkError);
+};
+
+export const autoTagAuthor = async (authorName: string, shotId: string) => {
+  if (!authorName || !authorName.trim()) return;
+  
+  const slug = generateSlug(authorName);
+  if (slug.length < 2) return;
+
+  const { data: isBlacklisted } = await supabase
+    .from('blacklisted_tags')
+    .select('slug')
+    .eq('slug', slug)
+    .maybeSingle();
+
+  if (isBlacklisted) {
+    console.log(`⛔ Autor "${authorName}" en lista negra. Tag no creado.`);
     return;
   }
 
-  // 2. LIMPIEZA: Borrar los vínculos anteriores para este shot (evita duplicados si editamos)
-  await supabase.from('shot_tags').delete().eq('shot_id', shotId);
+  const tagId = await getOrCreateTag({ name: authorName.trim(), slug, facet: 'author' });
+  if (!tagId) return;
 
-  // 3. VÍNCULO: Conectar los IDs de los tags con el ID del shot
-  const links = upsertedTags.map(t => ({ shot_id: parseInt(shotId), tag_id: t.id }));
-  const { error: linkError } = await supabase.from('shot_tags').insert(links);
-  
-  if (linkError) console.error("Error vinculando tags al shot", linkError);
+  // 🔴 LÍNEA CORREGIDA: Antes decía 'shot_shots'
+  const { error: linkError } = await supabase
+    .from('shot_tags')
+    .insert({ shot_id: parseInt(shotId), tag_id: tagId });
+
+  if (linkError && linkError.code !== '23505') {
+    console.error("Error vinculando autor al shot:", linkError);
+  }
+};
+
+export const autoTagBoard = async (boardName: string) => {
+  if (!boardName || !boardName.trim()) return;
+
+  const slug = generateSlug(boardName);
+  if (slug.length < 2) return;
+
+  const { data: isBlacklisted } = await supabase
+    .from('blacklisted_tags')
+    .select('slug')
+    .eq('slug', slug)
+    .maybeSingle();
+
+  if (isBlacklisted) return;
+
+  await getOrCreateTag({ name: boardName.trim(), slug, facet: 'collection' });
 };
