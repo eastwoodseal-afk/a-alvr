@@ -14,7 +14,7 @@ import FollowingOverlay from "./FollowingOverlay";
 import ConfigurationOverlay from "./ConfigurationOverlay"; // NUEVO NOMBRE
 
 export default function Header() {
-  const { session, user } = useAuth(); 
+    const { session, user, loading } = useAuth(); 
   const router = useRouter();
   const pathname = usePathname();
   
@@ -27,6 +27,7 @@ export default function Header() {
   const [bellOpen, setBellOpen] = useState(false); 
   const [showFollowing, setShowFollowing] = useState(false);
   const [showConfig, setShowConfig] = useState(false); // ACTUALIZADO
+  
 
   // Para saber si abrir Guardados en modo Bodega o Vitrina
   const [savedShotsInitialView, setSavedShotsInitialView] = useState<'all' | null>(null);
@@ -143,7 +144,7 @@ export default function Header() {
           )}
 
                     {/* ADMIN PANEL (Solo para Admin/Superadmin) */}
-          {session && user && (user.actualRole === 'admin' || user.actualRole === 'superadmin') && (
+                    {session && user && (user.actualRole === 'admin' || user.actualRole === 'superadmin') && (
             <button 
               onClick={() => { closeAllOverlays(); setShowAdmin(!showAdmin); }} 
               className={`rounded-full h-7 w-7 flex items-center justify-center border transition-all duration-200 ${showAdmin ? 'bg-yellow-500 border-yellow-400 text-black' : 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600'}`} 
@@ -160,8 +161,10 @@ export default function Header() {
             </div>
           )}
 
-          {/* USUARIO / LOGIN */}
-          {!session ? (
+                    {/* USUARIO / LOGIN */}
+          {loading ? (
+            <div className="rounded-full h-7 w-7 bg-gray-800 animate-pulse"></div>
+          ) : !session ? (
             <button 
               id="user-menu-btn" 
               className="bg-gray-700 text-gray-200 font-semibold rounded-full h-7 w-7 border border-gray-200 hover:bg-gray-800 transition flex items-center justify-center p-0" 

@@ -10,6 +10,7 @@ const FACET_OPTIONS = [
   { value: 'author', label: '👤 Arquitecto/Estudio' },
   { value: 'collection', label: '📁 Colección/Tablero' },
   { value: 'free', label: '🏷️ Libre' },
+    { value: 'obra', label: '🏗️ Obra / Proyecto' }, // 🆕 AÑADIDO
 ];
 
 interface Tag { id: number; name: string; slug: string; facet: string; }
