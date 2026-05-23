@@ -6,10 +6,12 @@ import Footer from "../components/Footer";
 import ModalUsername from "../components/ModalUsername";
 import { createClient } from '@supabase/supabase-js';
 
+
 export const metadata: Metadata = {
   title: "A'AL VR",
   description: "Ateneo d'Arquitectura Latinoamericana - Valor y Registro",
 };
+export const dynamic = 'force-dynamic';
 
 export default async function RootLayout({
   children,

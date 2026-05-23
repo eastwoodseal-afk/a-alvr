@@ -234,7 +234,7 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
   );
 
   return (
-    <div className="fixed left-0 right-0 bottom-0 z-[60] flex flex-col items-center pt-3 pb-[20px]" style={{ top: '56px', background: 'rgba(10, 24, 51, 0.75)' }}>
+    <div className="fixed left-0 right-0 bottom-0 z-[60] flex flex-col items-center pt-3 pb-[20px]" style={{ top: '56px', background: 'rgba(10, 24, 51, 0.88)' }}>
         
       <div className="relative bg-gray-900 rounded-2xl shadow-2xl text-gray-100 w-full md:w-[80vw] mx-auto overflow-hidden border border-gray-700" style={{ maxHeight: '90vh' }}>
 
