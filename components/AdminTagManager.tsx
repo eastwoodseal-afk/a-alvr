@@ -10,7 +10,7 @@ const FACET_OPTIONS = [
   { value: 'author', label: '👤 Arquitecto/Estudio' },
   { value: 'collection', label: '📁 Colección/Tablero' },
   { value: 'free', label: '🏷️ Libre' },
-    { value: 'obra', label: '🏗️ Obra / Proyecto' }, // 🆕 AÑADIDO
+  { value: 'obra', label: '🏗️ Obra / Proyecto' }, 
 ];
 
 interface Tag { id: number; name: string; slug: string; facet: string; }
@@ -39,37 +39,38 @@ export default function AdminTagManager() {
 
   const resetForm = () => { setForm({ name: "", slug: "", facet: "free" }); setEditingId(null); };
 
+  // 🆕 SINCRONIZACIÓN: Autogenerar slug al cambiar el nombre
+  const generateSlug = (name: string) => name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
+  const handleNameChange = (name: string) => setForm(prev => ({ ...prev, name, slug: generateSlug(name) }));
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !editingId) return;
     setSaving(true);
     const { error } = await supabase.from('tags').update({ name: form.name, slug: form.slug, facet: form.facet }).eq('id', editingId);
+    
     if (error) {
-      alert("Error al guardar: " + error.message);
+      // 🆕 ESCUDO: Capturar error de slug duplicado (Código 23505 de Postgres)
+      if (error.code === '23505') {
+        alert("Error: Ya existe una etiqueta con ese nombre o slug. Deben ser únicos.");
+      } else {
+        alert("Error al guardar: " + error.message);
+      }
     } else {
       await fetchTags();
       resetForm();
-      // 🆕 NOTIFICAR AL FOOTER QUE LOS TAGS CAMBIARON
       window.dispatchEvent(new CustomEvent('tags-updated'));
     }
     setSaving(false);
   };
 
   const handleDelete = async (tag: Tag) => {
-    // 1. Insertar en Lista Negra
-    await supabase.from('blacklisted_tags').insert({ 
-      slug: tag.slug, 
-      name: tag.name, 
-      reason: 'Eliminado por Admin' 
-    });
-
-    // 2. Borrar de la tabla principal
+    await supabase.from('blacklisted_tags').insert({ slug: tag.slug, name: tag.name, reason: 'Eliminado por Admin' });
     const { error } = await supabase.from('tags').delete().eq('id', tag.id);
     if (error) {
       alert("Error al eliminar: " + error.message);
     } else {
       await fetchTags();
-      // 🆕 NOTIFICAR AL FOOTER QUE LOS TAGS CAMBIARON
       window.dispatchEvent(new CustomEvent('tags-updated'));
     }
     setConfirmDeleteId(null);
@@ -85,8 +86,9 @@ export default function AdminTagManager() {
       
       {editingId ? (
         <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 mb-8 bg-gray-800 p-4 rounded-lg border border-gray-600">
-          <input type="text" placeholder="Nombre" className="flex-1 bg-gray-700 border border-gray-500 rounded-lg px-3 py-2 text-sm text-white" value={form.name} onChange={e => setForm(p => ({...p, name: e.target.value}))} required disabled={saving} />
-          <input type="text" placeholder="Slug" className="flex-1 bg-gray-700 border border-gray-500 rounded-lg px-3 py-2 text-sm text-white" value={form.slug} onChange={e => setForm(p => ({...p, slug: e.target.value}))} required disabled={saving} />
+          {/* 🆕 SINCRONIZACIÓN: Usar handleNameChange para el nombre */}
+          <input type="text" placeholder="Nombre" className="flex-1 bg-gray-700 border border-gray-500 rounded-lg px-3 py-2 text-sm text-white" value={form.name} onChange={e => handleNameChange(e.target.value)} required disabled={saving} />
+          <input type="text" placeholder="Slug (auto)" className="flex-1 bg-gray-700 border border-gray-500 rounded-lg px-3 py-2 text-sm text-white" value={form.slug} onChange={e => setForm(p => ({...p, slug: e.target.value}))} required disabled={saving} />
           <select className="bg-gray-700 border border-gray-500 rounded-lg px-3 py-2 text-sm text-white" value={form.facet} onChange={e => setForm(p => ({...p, facet: e.target.value}))} disabled={saving}>
             {FACET_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>

@@ -23,7 +23,7 @@ interface TagItem {
   facet: string;
 }
 
-export default function Footer() {
+export default function Footer({ skinUrl }: { skinUrl: string | null }) {
   const [showMenu, setShowMenu] = useState(false);
   const [modalSection, setModalSection] = useState<number | null>(null);
   const { user, isAdminMode, toggleAdminMode } = useAuth();
@@ -67,9 +67,7 @@ export default function Footer() {
     }
   }, [categoryFilterEnabled]);
 
-  useEffect(() => {
-    fetchTags();
-  }, []);
+  useEffect(() => { fetchTags(); }, []);
 
   useEffect(() => {
     const handleTagsUpdate = () => fetchTags();
@@ -149,11 +147,9 @@ export default function Footer() {
 
   return (
     <>
-      <footer className="fixed bottom-0 left-0 right-0 w-full h-16 py-4 px-6 bg-gray-800 text-gray-200 text-sm flex items-center justify-between z-40 border-t border-gray-700">
+      <footer className={`fixed bottom-0 left-0 right-0 w-full h-16 py-4 px-6 text-gray-200 text-sm flex items-center justify-between z-40 border-t border-gray-700 transition-colors duration-500 ${skinUrl ? 'bg-gray-800/30 backdrop-blur-md' : 'bg-gray-800'}`}>
         
-        {/* LADO IZQUIERDO: Filtros y Vista */}
         <div className="flex items-center gap-3">
-
           <div className="relative">
             <button id="category-btn" className={`rounded-full w-7 h-7 flex items-center justify-center shadow transition-all ${!categoryFilterEnabled ? 'bg-gray-700/50 text-gray-600 cursor-not-allowed opacity-50' : selectedCategory ? 'bg-yellow-500 text-black' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`} onClick={() => categoryFilterEnabled && setShowCategoryDropdown(!showCategoryDropdown)} disabled={!categoryFilterEnabled} title={categoryFilterEnabled ? "Filtrar por categoría" : "Filtro desactivado"}>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" /></svg>
@@ -178,14 +174,12 @@ export default function Footer() {
             <button id="tag-btn" className={`rounded-full w-7 h-7 flex items-center justify-center shadow transition-all ${selectedTag ? 'bg-yellow-500 text-black' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`} onClick={() => setShowTagDropdown(!showTagDropdown)} title="Filtrar por etiqueta">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" /></svg>
             </button>
-
             {showTagDropdown && (
               <div id="tag-dropdown" className="absolute bottom-10 left-0 w-64 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50">
                 <div className="max-h-80 overflow-y-auto custom-scrollbar">
                   <div className="p-1.5 border-b border-gray-700 sticky top-0 bg-gray-900 z-10">
                     <button onClick={() => handleTagSelect("", "")} className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition ${selectedTag === "" ? 'bg-yellow-500 text-black' : 'text-gray-300 hover:bg-gray-800'}`}>Todas las etiquetas</button>
                   </div>
-                  
                   {loadingTags ? (
                     <div className="text-center py-3 text-gray-500 text-xs animate-pulse">Cargando...</div>
                   ) : (
@@ -214,16 +208,10 @@ export default function Footer() {
           </button>
         </div>
 
-        {/* LADO DERECHO: Switch Admin + Crear */}
         <div className="flex items-center gap-4">
           
-          {/* SWITCH DE MODO ADMIN */}
           {isRealAdmin && (
-            <button 
-              onClick={toggleAdminMode}
-              className={`relative w-9 h-5 rounded-full transition-colors duration-200 flex-shrink-0 ${isAdminMode ? 'bg-yellow-500' : 'bg-gray-600'}`}
-              title={isAdminMode ? "Modo Admin: Activado (Click para vista Miembro)" : "Modo Admin: Desactivado (Click para volver a Admin)"}
-            >
+            <button onClick={toggleAdminMode} className={`relative w-9 h-5 rounded-full transition-colors duration-200 flex-shrink-0 ${isAdminMode ? 'bg-yellow-500' : 'bg-gray-600'}`} title={isAdminMode ? "Modo Admin: Activado" : "Modo Admin: Desactivado"}>
               <span className={`absolute top-[2px] left-[2px] w-4 h-4 rounded-full bg-white shadow-md transition-transform duration-200 ${isAdminMode ? 'translate-x-4' : 'translate-x-0'}`} />
             </button>
           )}

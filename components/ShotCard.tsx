@@ -55,8 +55,7 @@ export default function ShotCard({ shot, isSaved, isSaving, onSave, isLiked, lik
       <div className="p-2 flex justify-between items-start gap-2 relative">
         
         <div className="flex-1 min-w-0">
-          {/* 🆕 TAMAÑO REDUCIDO: de text-sm a text-xs */}
-                    {shot.author && ( <div className="text-yellow-400 text-xs truncate">{shot.author}</div> )}
+          {shot.author && ( <div className="text-yellow-400 text-xs truncate">{shot.author}</div> )}
           {shot.title && <div className="text-gray-400 text-sm truncate">{shot.title}</div>}
         </div>
 
@@ -96,18 +95,21 @@ export default function ShotCard({ shot, isSaved, isSaving, onSave, isLiked, lik
         </button>
       )}
 
-      {/* BOTÓN GUARDAR (DERECHA) */}
+      {/* BOTÓN GUARDAR (DERECHA) - 🆕 ESTILO ACTUALIZADO */}
       {!hideSave && user && (
         <button
-          className="absolute top-2 right-2 rounded-full w-[28px] h-[28px] flex items-center justify-center shadow-lg z-10"
-          style={isSaved ? { background: '#facc15', color: '#fff', cursor: 'default', boxShadow: '0 2px 8px #facc15aa' } : { background: 'rgba(236, 72, 153, 0.35)', backdropFilter: 'blur(8px)', color: '#d1d5db' } }
+          className={`absolute top-2 right-2 rounded-full w-[28px] h-[28px] flex items-center justify-center shadow-lg z-10 transition-colors ${
+            isSaved 
+              ? 'bg-gray-800/60 backdrop-blur-sm border border-yellow-500/70 text-yellow-400 cursor-default' 
+              : 'bg-pink-500/35 backdrop-blur-sm text-gray-300 hover:bg-pink-500/50'
+          }`}
           disabled={isSaved || isSaving}
           onClick={e => { e.stopPropagation(); onSave(); }}
         >
           {isSaving ? (
              <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
           ) : isSaved ? (
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
           ) : (
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.841-1.672A2.31 2.31 0 0013.86 4H10.14a2.31 2.31 0 00-2.087 1.278l-.84 1.672zM12 16.5a3 3 0 100-6 3 3 0 000 6z" /></svg>
           )}

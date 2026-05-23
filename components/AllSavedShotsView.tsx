@@ -4,12 +4,13 @@ import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import ShotCard from "./ShotCard";
 import ShotDetailModal from "./ShotDetailModal";
-import PublicCollectionOverlay from "./PublicCollectionOverlay"; // 🆕 IMPORT
+import PublicCollectionOverlay from "./PublicCollectionOverlay"; 
 import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
+import { Tag } from "../lib/tagUtils"; // 🆕 IMPORT TAG
 
 const BATCH_SIZE = 20;
 
-interface Shot { id: string; image_url: string; title?: string; description?: string; username?: string; user_id?: string; author?: string; likes_count?: number; views_count?: number; is_approved?: boolean; board_name?: string; }
+interface Shot { id: string; image_url: string; title?: string; description?: string; username?: string; user_id?: string; author?: string; likes_count?: number; views_count?: number; is_approved?: boolean; board_name?: string; tags?: Tag[]; } // 🆕 TAGS AÑADIDOS
 
 interface Props {
   userId: string | null | undefined;
@@ -27,7 +28,6 @@ export default function AllSavedShotsView({ userId, isOwner }: Props) {
   const [savedShots, setSavedShots] = useState<string[]>([]);
   const [likedShots, setLikedShots] = useState<string[]>([]);
 
-  // 🆕 ESTADO PARA VITRINA UOC
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
 
   const fetchShots = useCallback(async (pageNum: number) => {
@@ -37,6 +37,7 @@ export default function AllSavedShotsView({ userId, isOwner }: Props) {
     const start = pageNum * BATCH_SIZE;
     const end = start + BATCH_SIZE - 1;
 
+    // 🆕 INYECCIÓN: Añadido shot_tags ( tags ( id, name, slug, facet ) ) a la consulta
     let query = supabase
       .from("saved_shots")
       .select(`
@@ -45,7 +46,8 @@ export default function AllSavedShotsView({ userId, isOwner }: Props) {
         shots (
           id, image_url, title, description, author, user_id, likes_count, views_count, is_approved, 
           profiles!shots_user_id_fkey ( username ),
-          board_shots ( board_id, boards ( name ) )
+          board_shots ( board_id, boards ( name ) ),
+          shot_tags ( tags ( id, name, slug, facet ) )
         )
       `)
       .eq("user_id", userId)
@@ -75,7 +77,8 @@ export default function AllSavedShotsView({ userId, isOwner }: Props) {
               username: item.shots?.profiles?.username || "Anónimo", 
               board_name: bs?.boards?.name,
               views_count: item.shots?.views_count || 0,
-              is_approved: item.shots?.is_approved
+              is_approved: item.shots?.is_approved,
+              tags: item.shots?.shot_tags?.map((st: any) => st.tags).filter(Boolean) || [] // 🆕 MAPEO DE TAGS
           };
       });
 
@@ -163,7 +166,6 @@ export default function AllSavedShotsView({ userId, isOwner }: Props) {
 
       <div ref={sentinelRef} className="h-1 w-full"></div>
 
-      {/* 🆕 MODAL DETALLE CORREGIDO */}
       {selectedShot && currentUser && (
         <ShotDetailModal 
           shot={selectedShot}
@@ -183,7 +185,6 @@ export default function AllSavedShotsView({ userId, isOwner }: Props) {
         />
       )}
 
-      {/* 🆕 VITRINA UOC */}
       {selectedCollectionId && (
         <PublicCollectionOverlay userId={selectedCollectionId} onClose={() => setSelectedCollectionId(null)} />
       )}

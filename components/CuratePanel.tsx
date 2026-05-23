@@ -21,17 +21,19 @@ interface Shot {
   category_slug?: string;
   source_url?: string;
   tags?: Tag[];
+  is_approved?: boolean | null;
 }
 
 interface Props {
   shot: Shot;
   isOwnShot: boolean;
+  isAdmin: boolean;
   onSave: (updatedShot: Shot) => void;
   onCancel: () => void;
   onRelinquish?: (shotId: string) => void;
 }
 
-export default function CuratePanel({ shot, isOwnShot, onSave, onCancel, onRelinquish }: Props) {
+export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel, onRelinquish }: Props) {
   const [editTitle, setEditTitle] = useState(shot.title || "");
   const [editDescription, setEditDescription] = useState(shot.description || "");
   const [editAuthor, setEditAuthor] = useState(shot.author || "");
@@ -40,7 +42,7 @@ export default function CuratePanel({ shot, isOwnShot, onSave, onCancel, onRelin
   
   const [categories, setCategories] = useState<any[]>([]);
   const [editLoading, setEditLoading] = useState(false);
-  const [editError, setEditError] = useState("");
+  const [editError, setEditError] = useState(""); // 🛠️ TIPO STRING IMPLÍCITO
 
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -49,6 +51,13 @@ export default function CuratePanel({ shot, isOwnShot, onSave, onCancel, onRelin
   const [relinquishing, setRelinquishing] = useState(false);
   const [confirmRelinquish, setConfirmRelinquish] = useState(false);
 
+  const [newImageFile, setNewImageFile] = useState<File | null>(null);
+  const [newImagePreview, setNewImagePreview] = useState<string | null>(null);
+  const [isReplacingImage, setIsReplacingImage] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  const canReplaceImage = isAdmin || (isOwnShot && !shot.is_approved);
+
   useEffect(() => {
     setEditTitle(shot.title || "");
     setEditDescription(shot.description || "");
@@ -56,6 +65,9 @@ export default function CuratePanel({ shot, isOwnShot, onSave, onCancel, onRelin
     setEditCategoryId(shot.category_id?.toString() || "");
     setEditTags(shot.tags || []);
     setConfirmRelinquish(false);
+    setNewImageFile(null); 
+    setNewImagePreview(null);
+    setIsDraggingOver(false);
   }, [shot]);
 
   useEffect(() => { fetchCategories(); }, []);
@@ -79,19 +91,73 @@ export default function CuratePanel({ shot, isOwnShot, onSave, onCancel, onRelin
     setSavingCategory(false);
   };
 
+  const handleNewImageSelect = (file: File | null) => {
+    if (!file) { setNewImageFile(null); setNewImagePreview(null); return; }
+    if (file.size > 5 * 1024 * 1024) { setEditError("La nueva imagen excede 5MB."); return; }
+    setEditError(""); // 🛠️ CURA: String vacío en lugar de null
+    setNewImageFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setNewImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOver(true); };
+  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOver(false); };
+  const handleDrop = (e: React.DragEvent) => { 
+    e.preventDefault(); e.stopPropagation(); 
+    setIsDraggingOver(false); 
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) { 
+      handleNewImageSelect(e.dataTransfer.files[0]); 
+    } 
+  };
+
   const handleSave = async () => {
     setEditLoading(true); setEditError("");
-    const updateData = { title: editTitle, description: editDescription, author: editAuthor, category_id: editCategoryId ? parseInt(editCategoryId) : null };
+    
+    let finalImageUrl = shot.image_url;
+
+    if (newImageFile) {
+      setIsReplacingImage(true);
+      const filePath = `${shot.user_id}/${Date.now()}-${newImageFile.name}`;
+      const { error: uploadError } = await supabase.storage.from('shots').upload(filePath, newImageFile);
+      
+      if (uploadError) {
+        setEditError("Error al subir la nueva imagen.");
+        setEditLoading(false); setIsReplacingImage(false); return;
+      }
+      
+      const { data: publicData } = supabase.storage.from('shots').getPublicUrl(filePath);
+      finalImageUrl = publicData.publicUrl;
+    }
+
+    const updateData = { 
+      title: editTitle, description: editDescription, author: editAuthor, 
+      category_id: editCategoryId ? parseInt(editCategoryId) : null,
+      image_url: finalImageUrl 
+    };
+
     const { error } = await supabase.from('shots').update(updateData).eq('id', shot.id);
-    if (error) { setEditError("Error al guardar."); } 
-    else {
+    
+    if (error) { 
+      setEditError("Error al guardar."); 
+    } else {
       await saveShotTags(shot.id, editTags);
       if (editAuthor.trim()) await autoTagAuthor(editAuthor.trim(), shot.id);
+
+      if (newImageFile && shot.image_url) {
+        try {
+          const url = new URL(shot.image_url);
+          const pathParts = url.pathname.split('/');
+          const oldPath = pathParts.slice(pathParts.indexOf('shots') + 1).join('/');
+          if (oldPath) await supabase.storage.from('shots').remove([oldPath]);
+        } catch (e) { console.error("Error limpiando imagen vieja:", e); }
+      }
 
       const categoryObj = categories.find(c => c.id.toString() === editCategoryId);
       onSave({ ...shot, ...updateData, tags: editTags, category_name: categoryObj?.name || null });
     }
-    setEditLoading(false);
+    
+    setEditLoading(false); setIsReplacingImage(false);
   };
 
   const handleRelinquish = async () => {
@@ -100,29 +166,68 @@ export default function CuratePanel({ shot, isOwnShot, onSave, onCancel, onRelin
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) { alert("Error de autenticación."); setRelinquishing(false); return; }
-
       const res = await fetch('/api/relinquish-shot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shotId: shot.id, accessToken: session.access_token })
       });
-
       const data = await res.json();
-      if (res.ok && data.success) {
-        onRelinquish(shot.id);
-      } else {
-        alert(data.error || "No se pudo eliminar el shot.");
-      }
-    } catch (err) {
-      alert("Error de conexión al eliminar.");
-    } finally {
-      setRelinquishing(false);
-      setConfirmRelinquish(false);
-    }
+      if (res.ok && data.success) { onRelinquish(shot.id); } 
+      else { alert(data.error || "No se pudo eliminar el shot."); }
+    } catch (err) { alert("Error de conexión al eliminar."); } 
+    finally { setRelinquishing(false); setConfirmRelinquish(false); }
   };
 
   return (
     <div className="space-y-2">
+      
+      {/* ZONA DE TRANSPLANTE (DRAG & DROP + CLICK) */}
+      <div className="mb-2">
+        <input id="replace-image-input" type="file" accept="image/*" className="hidden" onChange={e => handleNewImageSelect(e.target.files?.[0] || null)} disabled={editLoading || !canReplaceImage} />
+        
+        <div 
+          className={`relative w-full h-28 bg-gray-800 rounded-lg overflow-hidden transition-colors border-2 border-dashed ${
+            isDraggingOver ? 'border-yellow-500 bg-yellow-900/20 scale-105' 
+            : newImageFile ? 'border-green-500 bg-green-900/10' 
+            : canReplaceImage ? 'border-gray-700 hover:border-gray-500 cursor-pointer' 
+            : 'border-transparent opacity-90'
+          }`}
+          onDragOver={canReplaceImage ? handleDragOver : undefined}
+          onDragLeave={canReplaceImage ? handleDragLeave : undefined}
+          onDrop={canReplaceImage ? handleDrop : undefined}
+          onClick={canReplaceImage && !editLoading ? () => document.getElementById('replace-image-input')?.click() : undefined}
+        >
+          <img src={newImagePreview || shot.image_url} alt="Preview" className={`w-full h-full object-cover transition-opacity ${isDraggingOver ? 'opacity-30' : 'opacity-100'}`} />
+
+          {canReplaceImage && !isReplacingImage && (
+            <div className={`absolute inset-0 flex flex-col items-center justify-center transition-colors ${
+              isDraggingOver ? 'bg-black/0' : newImageFile ? 'bg-green-500/20' : 'bg-black/40 opacity-0 hover:opacity-100'
+            }`}>
+              {newImageFile ? (
+                <div className="text-center">
+                  <span className="text-green-400 text-xs font-bold">✓ Nueva imagen lista</span>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setNewImageFile(null); setNewImagePreview(null); }} className="block mx-auto text-red-400 text-[10px] hover:underline mt-1">Cancelar</button>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white mx-auto mb-1"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+                  <span className="text-white text-[10px] font-bold">Arrastra o haz clic para reemplazar</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {isReplacingImage && (
+            <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
+        </div>
+        
+        {!canReplaceImage && shot.is_approved && (
+          <p className="text-[9px] text-gray-600 italic mt-1">Las imágenes de shots aprobados solo pueden ser reemplazadas por un Administrador.</p>
+        )}
+      </div>
+
       <input type="text" placeholder="Título" className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" value={editTitle} onChange={e => setEditTitle(e.target.value)} disabled={editLoading || relinquishing} />
       <input type="text" placeholder="Arquitecto / Estudio" className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" value={editAuthor} onChange={e => setEditAuthor(e.target.value)} disabled={editLoading || relinquishing} />
       <textarea placeholder="Descripción" className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" rows={3} value={editDescription} onChange={e => setEditDescription(e.target.value)} disabled={editLoading || relinquishing} />
@@ -157,22 +262,13 @@ export default function CuratePanel({ shot, isOwnShot, onSave, onCancel, onRelin
 
       <div className="flex gap-2 pt-1">
         {isOwnShot && onRelinquish && (
-          <button 
-            type="button" 
-            onClick={() => confirmRelinquish ? handleRelinquish() : setConfirmRelinquish(true)} 
-            disabled={relinquishing} 
-            className={`h-7 px-3 rounded-lg font-bold text-xs transition disabled:opacity-50 flex-shrink-0 ${confirmRelinquish ? 'bg-red-600 hover:bg-red-500 text-white animate-pulse' : 'bg-red-900/40 hover:bg-red-800/60 text-red-400 border border-red-700/50'}`}
-          >
-            {/* 🆕 NOMBRE CAMBIADO: De "Renunciar" a "Eliminar" */}
+          <button type="button" onClick={() => confirmRelinquish ? handleRelinquish() : setConfirmRelinquish(true)} disabled={relinquishing} className={`h-7 px-3 rounded-lg font-bold text-xs transition disabled:opacity-50 flex-shrink-0 ${confirmRelinquish ? 'bg-red-600 hover:bg-red-500 text-white animate-pulse' : 'bg-red-900/40 hover:bg-red-800/60 text-red-400 border border-red-700/50'}`}>
             {relinquishing ? "..." : confirmRelinquish ? "¿Eliminar?" : "Eliminar"}
           </button>
         )}
-
-        <button type="button" onClick={() => { onCancel(); setConfirmRelinquish(false); }} disabled={editLoading || relinquishing} className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-bold py-1.5 rounded text-xs transition">
-          Cancelar
-        </button>
+        <button type="button" onClick={() => { onCancel(); setConfirmRelinquish(false); }} disabled={editLoading || relinquishing} className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-bold py-1.5 rounded text-xs transition">Cancelar</button>
         <button onClick={handleSave} disabled={editLoading || relinquishing} className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-1.5 rounded text-xs transition disabled:opacity-50">
-          {editLoading ? "..." : "Guardar"}
+          {isReplacingImage ? "Transplantando..." : editLoading ? "..." : "Guardar"}
         </button>
       </div>
     </div>

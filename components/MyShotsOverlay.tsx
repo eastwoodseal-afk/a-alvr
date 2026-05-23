@@ -4,9 +4,10 @@ import { useAuth } from "../lib/AuthContext";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
 import ShotCard from "./ShotCard";
-import ShotDetailModal from "./ShotDetailModal"; 
+import ShotDetailModal from "./ShotDetailModal";
 import PublicCollectionOverlay from "./PublicCollectionOverlay";
 import ShareStudioModal from "./ShareStudioModal";
+import ModalCreateShot from "./ModalCreateShot"; // 🆕 IMPORT
 import { batchLinkObra } from "../lib/tagUtils";
 
 interface Shot { 
@@ -40,6 +41,10 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
   const [selectedShots, setSelectedShots] = useState<string[]>([]);
   const [obraName, setObraName] = useState("");
   const [linkingObra, setLinkingObra] = useState(false);
+
+  // 🆕 ESTADOS PARA MENÚ DE CREACIÓN
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const [modalSection, setModalSection] = useState<number | null>(null);
 
   const fetchMyShots = useCallback(async (pageNum: number) => {
     if (isFetchingRef.current || !userId) return;
@@ -125,13 +130,27 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
 
   const isObraCellActive = selectedShots.length > 0;
 
+  // 🆕 CERRAR MENÚ AL HACER CLIC FUERA
+  useEffect(() => {
+    if (!showCreateMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      const menu = document.getElementById("my-shots-create-menu");
+      const btn = document.getElementById("my-shots-create-btn");
+      if (menu && !menu.contains(e.target as Node) && btn && !btn.contains(e.target as Node)) {
+        setShowCreateMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showCreateMenu]);
+
   return (
     <div className="fixed top-14 right-0 bottom-0 left-0 z-[50] bg-gray-950 flex flex-col">
       
-      {/* HEADER RESTAURADO + CELDA OBRA */}
+      {/* HEADER REORGANIZADO */}
       <div className="flex-shrink-0 flex items-center px-4 py-3 border-b border-yellow-500 bg-[#0a1833] gap-2">
         
-        {/* IZQUIERDA: Botón y Título original */}
+        {/* IZQUIERDA: Botón + Título + Compartir */}
         <button className="w-7 h-7 rounded-full bg-gray-700 hover:bg-gray-600 text-yellow-500 flex items-center justify-center flex-shrink-0 transition mr-2" onClick={onClose} aria-label="Regresar">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
         </button>
@@ -139,27 +158,31 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
           Mis Shots <span className="text-gray-500 mx-1">|</span> Mi Estudio
         </h2>
 
-        {/* CENTRO: Espaciador flexible */}
+        {/* 🆕 BOTONES DE COMPARTIR JUNTO AL TÍTULO */}
+        <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+          <button onClick={() => setShowShareModal(true)} className="bg-blue-600 hover:bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center shadow transition" title="Compartir Estudio">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" /></svg>
+          </button>
+          <button onClick={handleWhatsAppShare} disabled={generatingLink} className="bg-green-600 hover:bg-green-500 text-white rounded-full w-7 h-7 flex items-center justify-center shadow transition disabled:opacity-50" title="Compartir por WhatsApp">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" /></svg>
+          </button>
+        </div>
+
+        {/* CENTRO: Espaciador + Celda Obra */}
         <div className="flex-1" />
 
-        {/* CELDA DE OBRA (SIEMPRE VISIBLE, CENTRADA) */}
-        <div className={`flex items-center gap-1.5 bg-gray-800 rounded-full border transition-all duration-200 h-8 ${isObraCellActive ? 'border-yellow-500 shadow-sm shadow-yellow-500/20 w-64 px-3' : 'border-gray-700 opacity-60 w-24 justify-center px-2 pointer-events-none'}`}>
-          
-          {isObraCellActive && (
+        {isObraCellActive && (
+          <div className={`flex items-center gap-1.5 bg-gray-800 rounded-full border transition-all duration-200 h-8 border-yellow-500 shadow-sm shadow-yellow-500/20 w-64 px-3`}>
             <span className="text-[10px] bg-yellow-500 text-black font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">{selectedShots.length}</span>
-          )}
-
-          <input 
-            type="text" 
-            placeholder={isObraCellActive ? "Vincular a Obra..." : "Obra"} 
-            className={`bg-transparent border-none text-white focus:outline-none placeholder:text-gray-500 min-w-0 ${isObraCellActive ? 'flex-1 text-xs' : 'w-full text-[10px] text-center'}`} 
-            value={obraName} 
-            onChange={e => setObraName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleLinkObra()}
-            disabled={!isObraCellActive || linkingObra}
-          />
-
-          {isObraCellActive && (
+            <input 
+              type="text" 
+              placeholder="Vincular a Obra..." 
+              className="bg-transparent border-none text-white focus:outline-none placeholder:text-gray-500 flex-1 text-xs" 
+              value={obraName} 
+              onChange={e => setObraName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLinkObra()}
+              disabled={linkingObra}
+            />
             <div className="flex items-center gap-1 flex-shrink-0">
               <button 
                 onClick={handleLinkObra} 
@@ -177,19 +200,30 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* DERECHA: Espaciador + Botones originales */}
         <div className="flex-1" />
 
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button onClick={() => setShowShareModal(true)} className="bg-blue-600 hover:bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center shadow transition" title="Compartir con usuario del Ateneo">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" /></svg>
+        {/* 🆕 DERECHA: Menú de Creación Rápido */}
+        <div className="relative flex-shrink-0 group">
+          <button 
+            id="my-shots-create-btn"
+            className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow transition" 
+            onClick={() => setShowCreateMenu(prev => !prev)} 
+            aria-label="Crear shot"
+          >
+            +
           </button>
-          <button onClick={handleWhatsAppShare} disabled={generatingLink} className="bg-green-600 hover:bg-green-500 text-white rounded-full w-7 h-7 flex items-center justify-center shadow transition disabled:opacity-50" title="Compartir Estudio por WhatsApp">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" /></svg>
-          </button>
+          
+                    {showCreateMenu && (
+            <div id="my-shots-create-menu" className="absolute top-10 right-0 flex flex-col items-end gap-2 z-50">
+              <button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow" aria-label="Subir archivo" onClick={() => { setModalSection(1); setShowCreateMenu(false); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 10l-4-4m0 0l-4 4m4-4v12" /></svg></button>
+              <button className="bg-green-500 hover:bg-green-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow" aria-label="Subir carpeta" onClick={() => { setModalSection(2); setShowCreateMenu(false); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7a2 2 0 012-2h3l2 2h7a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /></svg></button>
+              <button className="bg-purple-500 hover:bg-purple-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow" aria-label="Subir por URL" onClick={() => { setModalSection(3); setShowCreateMenu(false); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19v-6m0 0l-2 2m2-2l2 2m-2-2V5m8 14a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h3l2 2h7a2 2 0 012 2v7z" /></svg></button>
+              <button className="bg-pink-500 hover:bg-pink-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow" aria-label="Subir por cámara" onClick={() => { setModalSection(4); setShowCreateMenu(false); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h2l2-3h10l2 3h2a2 2 0 012 2v10a2 2 0 01-2 2H3a2 2 0 01-2-2V9a2 2 0 012-2zm9 4a3 3 0 100 6 3 3 0 000-6z" /></svg></button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -216,7 +250,6 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
                   onClick={() => isObraCellActive ? setSelectedShots(prev => prev.includes(shot.id) ? prev.filter(id => id !== shot.id) : [...prev, shot.id]) : setSelectedShot(shot)} 
                   hideViews={true} 
                 />
-                {/* CHECKBOX DE SELECCIÓN */}
                 <input 
                   type="checkbox" 
                   checked={selectedShots.includes(shot.id)} 
@@ -255,6 +288,9 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
       )}
 
       {showShareModal && <ShareStudioModal open={showShareModal} onClose={() => setShowShareModal(false)} />}
+
+      {/* 🆕 MODAL DE CREACIÓN INTEGRADO */}
+      <ModalCreateShot open={modalSection !== null} section={modalSection} onClose={() => setModalSection(null)} />
     </div>
   );
 }
