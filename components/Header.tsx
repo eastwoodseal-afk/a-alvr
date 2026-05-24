@@ -93,7 +93,7 @@ export default function Header({ skinUrl }: { skinUrl: string | null }) {
 
   return (
     <>
-      <header className={`fixed top-0 left-0 w-full h-14 flex items-center justify-between px-6 shadow z-50 transition-colors duration-500 ${skinUrl ? 'bg-gray-900/40 ' : 'bg-gray-900'}`}>
+      <header className={`fixed top-0 left-0 w-full h-14 flex items-center justify-between px-6 shadow z-50 transition-colors duration-500 border-b border-gray-700/50 ${skinUrl ? 'bg-gray-900/40 backdrop-blur-md' : 'bg-gray-900'}`}>
                 <div className="flex flex-col gap-0">
           <div className="flex items-center gap-4">
             <div className="bg-yellow-500 rounded-full px-2 h-7 text-lg flex items-center gap-0" style={{ fontFamily: 'Times New Roman, Times, serif', fontWeight: 400 }} onClick={() => window.location.href = '/'}>

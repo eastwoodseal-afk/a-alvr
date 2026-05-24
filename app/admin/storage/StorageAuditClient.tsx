@@ -24,9 +24,12 @@ export default function StorageAuditClient() {
   const [rejectedShots, setRejectedShots] = useState<ShotItem[]>([]);
   const [ghostShots, setGhostShots] = useState<ShotItem[]>([]);
   const [totalBucketFiles, setTotalBucketFiles] = useState(0);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
   const [auditError, setAuditError] = useState('');
+  
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
+  const [deletingShotId, setDeletingShotId] = useState<string | null>(null);
+  
+  const [abandonedShots, setAbandonedShots] = useState<ShotItem[]>([]);
 
   useEffect(() => { checkExistingSession(); }, []);
 
@@ -66,7 +69,7 @@ export default function StorageAuditClient() {
       setRejectedShots(data.rejectedShots || []);
       setGhostShots(data.ghostShots || []);
       setTotalBucketFiles(data.totalBucketFiles || 0);
-      setDebugInfo(data.debug || null);
+      setAbandonedShots(data.abandonedShots || []);
     } catch (err: any) { setAuditError(err.message); } 
     finally { setLoading(false); }
   };
@@ -81,9 +84,29 @@ export default function StorageAuditClient() {
         body: JSON.stringify({ accessToken: session.access_token, path })
       });
       if (res.ok) setOrphans(prev => prev.filter(o => o.path !== path));
-      else alert("Error al eliminar.");
+      else alert("Error al eliminar archivo.");
     } catch { alert("Error de red."); } 
     finally { setDeletingPath(null); }
+  };
+
+  const handleDeleteShot = async (shotId: string) => {
+    if (!session) return;
+    setDeletingShotId(shotId);
+    try {
+      const res = await fetch('/api/storage-audit', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: session.access_token, shotId })
+      });
+      if (res.ok) {
+        setAbandonedShots(prev => prev.filter(s => s.id !== shotId));
+        setRejectedShots(prev => prev.filter(s => s.id !== shotId));
+      } else {
+        const data = await res.json();
+        alert(data.error || "Error al eliminar el shot.");
+      }
+    } catch { alert("Error de red."); } 
+    finally { setDeletingShotId(null); }
   };
 
   if (authLoading) {
@@ -109,11 +132,11 @@ export default function StorageAuditClient() {
   }
 
   return (
-    <div className="p-4 max-w-7xl mx-auto">
+    <div className="p-4 max-w-[1800px] mx-auto">
       <div className="flex items-center justify-between mb-6 border-b border-gray-800 pb-3">
         <div>
           <h1 className="text-xl font-bold text-red-400">🔧 Cuarentena</h1>
-          <p className="text-[10px] text-gray-600">Basura y anomalías</p>
+          <p className="text-[10px] text-gray-600">Basura y anomalías del sistema</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => router.push('/')} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-[10px] font-bold rounded transition">Volver</button>
@@ -121,45 +144,64 @@ export default function StorageAuditClient() {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-2 mb-4">
+      <div className="grid grid-cols-5 gap-2 mb-6">
         <StatCard label="Bucket" value={totalBucketFiles} color="blue" />
         <StatCard label="Huérfanos" value={orphans.length} color="red" />
         <StatCard label="Rechazados" value={rejectedShots.length} color="orange" />
-        <StatCard label="Ghost" value={ghostShots.length} color="purple" />
+        <StatCard label="Abandonados" value={abandonedShots.length} color="purple" />
+        <StatCard label="Ghost" value={ghostShots.length} color="gray" />
       </div>
 
-      {debugInfo && (
-        <div className="mb-4 bg-gray-900 p-2 rounded border border-gray-800 text-[8px] font-mono text-gray-600">
-          <p className="text-gray-500 font-bold">Debug:</p>
-          <p>BD: {JSON.stringify(debugInfo.sampleDbPaths)}</p>
-          <p>Bucket: {JSON.stringify(debugInfo.sampleBucketPaths)}</p>
-        </div>
-      )}
+      {/* 🛠️ CIRUGÍA: Bloque Debug extirpado por completo */}
 
       {auditError && <div className="bg-red-900/30 text-red-400 p-2 rounded text-[10px] mb-4 border border-red-800">{auditError}</div>}
 
-      {/* HUÉRFANOS */}
       <Section title="🔴 Huérfanos (Solo en Bucket)" count={orphans.length}>
-        {orphans.map(o => (
-          <div key={o.path} className="flex items-center gap-2 bg-gray-900 p-1.5 rounded border border-red-900/40 group">
-            <img src={o.url} className="w-10 h-10 object-cover rounded flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-[8px] text-gray-400 truncate">{o.path}</p>
-              <p className="text-[7px] text-gray-600">{o.size ? `${(o.size/1024).toFixed(0)}KB` : ''}</p>
+        <div className="columns-4 md:columns-6 lg:columns-8 gap-2 w-full">
+          {orphans.map(o => (
+            <div key={o.path} className="relative mb-2 break-inside-avoid rounded-lg overflow-hidden border border-red-900/40 group bg-gray-900">
+              <img src={o.url} className="w-full h-auto object-cover" />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                <button 
+                  onClick={() => handleDeleteOrphan(o.path)} 
+                  disabled={deletingPath === o.path} 
+                  className="bg-red-600 hover:bg-red-500 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg shadow-lg transition disabled:opacity-50"
+                >
+                  {deletingPath === o.path ? '...' : '🗑️'}
+                </button>
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-1.5">
+                <p className="text-[9px] text-gray-400 truncate">{o.path.split('/').pop()}</p>
+                <p className="text-[8px] text-gray-500">{o.size ? `${(o.size/1024).toFixed(0)}KB` : ''}</p>
+              </div>
             </div>
-            <button onClick={() => handleDeleteOrphan(o.path)} disabled={deletingPath === o.path} className="bg-red-600 hover:bg-red-500 text-white rounded px-1.5 py-0.5 text-[8px] font-bold opacity-0 group-hover:opacity-100 transition">{deletingPath === o.path ? '...' : 'DEL'}</button>
-          </div>
-        ))}
+          ))}
+        </div>
       </Section>
 
-      {/* RECHAZADOS */}
       <Section title="🟠 Rechazados (is_rejected = true)" count={rejectedShots.length}>
-        {rejectedShots.map(s => <ShotRow key={s.id} shot={s} />)}
+        <div className="columns-4 md:columns-6 lg:columns-8 gap-2 w-full">
+          {rejectedShots.map(s => <AuditShotCard key={s.id} shot={s} />)}
+        </div>
       </Section>
 
-      {/* GHOST SHOTS */}
-      <Section title="👻 Ghost (En BD, Sin Archivo)" count={ghostShots.length}>
-        {ghostShots.map(s => <ShotRow key={s.id} shot={s} isGhost />)}
+      <Section title="💀 Abandonados (Ghost + Rechazado + No Aprobado)" count={abandonedShots.length}>
+        <div className="columns-4 md:columns-6 lg:columns-8 gap-2 w-full">
+          {abandonedShots.map(s => (
+            <AuditShotCard 
+              key={s.id} 
+              shot={s} 
+              onDelete={handleDeleteShot} 
+              isDeleting={deletingShotId === s.id} 
+            />
+          ))}
+        </div>
+      </Section>
+
+      <Section title="📉 Ghost (En BD, Sin Archivo Físico)" count={ghostShots.length}>
+        <div className="columns-4 md:columns-6 lg:columns-8 gap-2 w-full">
+          {ghostShots.map(s => <AuditShotCard key={s.id} shot={s} isGhost />)}
+        </div>
       </Section>
 
     </div>
@@ -167,43 +209,49 @@ export default function StorageAuditClient() {
 }
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
-  const colors: any = { blue: 'text-blue-400', orange: 'text-orange-400', red: 'text-red-400', purple: 'text-purple-400' };
+  const colors: any = { blue: 'text-blue-400', orange: 'text-orange-400', red: 'text-red-400', purple: 'text-purple-400', gray: 'text-gray-400' };
   return <div className="bg-gray-900 p-2 rounded border border-gray-800 text-center"><div className={`text-lg font-bold ${colors[color]}`}>{value}</div><div className="text-[8px] text-gray-600 uppercase">{label}</div></div>;
 }
 
 function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
   return (
-    <div className="mb-4">
-      <h2 className="text-[10px] font-bold text-gray-500 mb-1 border-b border-gray-800 pb-1">{title} ({count})</h2>
-      {count === 0 ? <div className="text-gray-700 text-[8px] italic py-1">Limpio.</div> : <div className="space-y-1">{children}</div>}
+    <div className="mb-6">
+      <h2 className="text-xs font-bold text-gray-400 mb-2 border-b border-gray-800 pb-2">{title} ({count})</h2>
+      {count === 0 ? <div className="text-gray-700 text-[9px] italic py-1">Limpio.</div> : children}
     </div>
   );
 }
 
-function ShotRow({ shot, isGhost }: { shot: ShotItem; isGhost?: boolean }) {
+// 🛠️ TIPOGRAFÍA AUMENTADA PARA LEGIBILIDAD
+function AuditShotCard({ shot, isGhost, onDelete, isDeleting }: { shot: ShotItem; isGhost?: boolean; onDelete?: (id: string) => void; isDeleting?: boolean }) {
   return (
-    <div className="flex items-center gap-2 bg-gray-900 p-1.5 rounded border border-gray-800">
+    <div className="relative mb-2 break-inside-avoid rounded-lg overflow-hidden border border-gray-800 group bg-gray-900">
       {isGhost ? (
-        <div className="w-10 h-10 bg-gray-800 rounded flex items-center justify-center text-gray-700 text-[8px] flex-shrink-0">404</div>
+        <div className="w-full aspect-square bg-gray-800 flex items-center justify-center text-gray-700 text-xs font-bold">404</div>
       ) : (
-        <img src={shot.image_url} className="w-10 h-10 object-cover rounded flex-shrink-0" />
+        <img src={shot.image_url} className="w-full h-auto object-cover" />
       )}
-      <div className="flex-1 min-w-0 text-[8px] space-y-0.5">
-        <div className="flex items-center gap-1">
-          <span className="text-white font-bold truncate">{shot.title || "Sin título"}</span>
-          <span className="text-gray-600">por</span>
-          <span className="text-yellow-400 truncate">{shot.author || "?"}</span>
+      
+      {onDelete && (
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+          <button 
+            onClick={() => onDelete(shot.id)} 
+            disabled={isDeleting} 
+            className="bg-red-600 hover:bg-red-500 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg shadow-lg transition disabled:opacity-50"
+          >
+            {isDeleting ? '...' : '🗑️'}
+          </button>
         </div>
-        <div className="flex gap-2 text-gray-500">
+      )}
+
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-2 pointer-events-none">
+        <div className="text-[11px] text-white font-bold truncate">{shot.title || "Sin título"}</div>
+        <div className="text-[10px] text-yellow-400 truncate">{shot.author || "?"}</div>
+        <div className="flex gap-2 text-[9px] text-gray-400 mt-0.5">
           <span>@{shot.username}</span>
           <span>❤️{shot.likes_count}</span>
           <span>👁️{shot.views_count}</span>
-          <span>💾{shot.saved_count}</span>
         </div>
-      </div>
-      <div className="flex flex-col items-end flex-shrink-0 text-[7px]">
-        <div className="text-red-400 font-bold">rejected: {String(shot.is_rejected)}</div>
-        <div className="text-gray-700">ID: {String(shot.id).slice(0,6)}...</div>
       </div>
     </div>
   );

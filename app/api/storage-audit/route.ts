@@ -23,10 +23,9 @@ export async function POST(req: NextRequest) {
     if (profile?.role !== 'superadmin') return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 });
 
     // 2. OBTENER TODOS LOS SHOTS
-    const { data: shots, error: dbError } = await supabaseAdmin
+   const { data: shots, error: dbError } = await supabaseAdmin
       .from('shots')
-      .select('id, image_url, is_rejected, is_approved, title, author, created_at, likes_count, views_count, profiles!shots_user_id_fkey(username), saved_shots(user_id)');
-    
+      .select('id, user_id, image_url, is_rejected, is_approved, title, author, created_at, likes_count, views_count, profiles!shots_user_id_fkey(username), saved_shots(user_id)')
     if (dbError) throw dbError;
 
     const dbUserIdFilename = new Map<string, any>();
@@ -95,10 +94,17 @@ export async function POST(req: NextRequest) {
       return false;
     }).map(formatShot) || [];
 
+    // CURA: ID DEL FANTASMA CORREGIDO
+    const GHOST_USER_ID = '9e717b49-395c-48d2-add9-7a60ab9c7baf'; 
+    const abandonedShots = shots?.filter(s => 
+      (s.user_id === GHOST_USER_ID || !s.user_id) && s.is_approved === false && s.is_rejected === true
+    ).map(formatShot) || [];
+
     return NextResponse.json({ 
       orphans, 
       rejectedShots,
       ghostShots,
+      abandonedShots,
       totalBucketFiles,
       debug: {
         sampleDbPaths: Array.from(dbUserIdFilename.keys()).slice(0, 5),
@@ -112,10 +118,11 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// 🛠️ DELETE MEJORADO: Ahora elimina Archivos (path) O Registros de BD (shotId)
 export async function DELETE(req: NextRequest) {
   try {
-    const { accessToken, path } = await req.json();
-    if (!accessToken || !path) return NextResponse.json({ error: 'Faltan datos' }, { status: 400 });
+    const { accessToken, path, shotId } = await req.json();
+    if (!accessToken || (!path && !shotId)) return NextResponse.json({ error: 'Faltan datos (path o shotId)' }, { status: 400 });
 
     const supabaseAdmin = getSupabaseAdmin();
     const { data: { user } } = await supabaseAdmin.auth.getUser(accessToken);
@@ -124,8 +131,32 @@ export async function DELETE(req: NextRequest) {
     const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single();
     if (profile?.role !== 'superadmin') return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 });
 
-    const { error: deleteError } = await supabaseAdmin.storage.from('shots').remove([path]);
-    if (deleteError) throw deleteError;
+    // MODO 1: Eliminar archivo huérfano del Storage
+    if (path) {
+      const { error: deleteError } = await supabaseAdmin.storage.from('shots').remove([path]);
+      if (deleteError) throw deleteError;
+    }
+
+    // MODO 2: Eliminar registro de la Base de Datos (Abandonados/Rechazados)
+    if (shotId) {
+      const numericId = parseInt(shotId);
+      if (isNaN(numericId)) return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
+      
+      // Opcional pero recomendado: borrar el archivo físico también si existe
+      const { data: shotData } = await supabaseAdmin.from('shots').select('image_url').eq('id', numericId).single();
+      if (shotData?.image_url) {
+        try {
+          const url = new URL(shotData.image_url);
+          const pathParts = url.pathname.split('/');
+          const storagePath = pathParts.slice(pathParts.indexOf('shots') + 1).join('/');
+          if (storagePath) await supabaseAdmin.storage.from('shots').remove([storagePath]);
+        } catch (e) { console.warn("No se pudo borrar el archivo físico del shot eliminado."); }
+      }
+
+      // Borrar el registro de la BD
+      const { error: dbError } = await supabaseAdmin.from('shots').delete().eq('id', numericId);
+      if (dbError) throw dbError;
+    }
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

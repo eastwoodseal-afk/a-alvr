@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabaseClient";
 import TagInput from "./TagInput";
-import { Tag, saveShotTags, autoTagAuthor } from "../lib/tagUtils"; // 🆕 IMPORT
+import { Tag, saveShotTags, autoTagAuthor } from "../lib/tagUtils";
 
 interface Shot {
   id: string; image_url: string; title?: string; description?: string; author?: string; username?: string; tags?: Tag[];
@@ -30,6 +30,9 @@ export default function AdminShotDetailModal({ shot, onClose, onApprove, onRejec
   const [isAdding, setIsAdding] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
+
+  // 🆕 Estado para confirmación de rechazo
+  const [confirmReject, setConfirmReject] = useState(false);
 
   useEffect(() => { fetchCategories(); }, []);
 
@@ -62,10 +65,17 @@ export default function AdminShotDetailModal({ shot, onClose, onApprove, onRejec
     };
 
     await saveShotTags(shot.id, selectedTags);
-    // 🆕 AUTO-TAG AUTOR (Si el admin añadió o corrigió el autor)
     if (editAuthor.trim()) await autoTagAuthor(editAuthor.trim(), shot.id);
 
     onApprove(shot.id, updatedData);
+  };
+
+  const handleRejectClick = () => {
+    if (confirmReject) {
+      onReject(shot.id, rejectionReason);
+    } else {
+      setConfirmReject(true);
+    }
   };
 
   return (
@@ -84,6 +94,17 @@ export default function AdminShotDetailModal({ shot, onClose, onApprove, onRejec
           </div>
 
           <div className="md:w-1/2 space-y-3">
+            
+            {/* 🆕 BOTÓN APROBAR MOVIDO ARRIBA */}
+            <button 
+              onClick={handleApprove} 
+              disabled={editLoading} 
+              className="w-full px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition disabled:opacity-50 text-sm flex items-center justify-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+              {editLoading ? "Procesando..." : "Aprobar y Publicar"}
+            </button>
+
             <div>
               <label className="text-xs text-gray-400 block mb-1">Título</label>
               <input type="text" className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500" value={editTitle} onChange={e => setEditTitle(e.target.value)} disabled={editLoading} />
@@ -128,15 +149,46 @@ export default function AdminShotDetailModal({ shot, onClose, onApprove, onRejec
           </div>
         </div>
 
+        {/* 🛠️ SECCIÓN RECHAZO CON CONFIRMACIÓN */}
         <div className="p-4 border-t border-gray-700 flex flex-col gap-3 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <input type="text" placeholder="Razón de archivo (opcional, visible para el usuario)..." value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} className="flex-1 px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-1 focus:ring-orange-500" />
-            <button onClick={() => onReject(shot.id, rejectionReason)} disabled={editLoading} className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg transition disabled:opacity-50 text-sm whitespace-nowrap">Archivar</button>
-          </div>
-          <div className="flex justify-end">
-            <button onClick={handleApprove} disabled={editLoading} className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition disabled:opacity-50 text-sm">
-              {editLoading ? "Procesando..." : "Aprobar y Publicar"}
-            </button>
+          <div className="flex items-start gap-3">
+            <div className="flex-1">
+              <input 
+                type="text" 
+                placeholder="Razón de rechazo (opcional, visible para el usuario)..." 
+                value={rejectionReason} 
+                onChange={(e) => setRejectionReason(e.target.value)} 
+                onFocus={() => setConfirmReject(false)} // Resetear si está editando la razón
+                className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-1 focus:ring-orange-500" 
+              />
+              <p className="text-[9px] text-gray-500 mt-1">El usuario verá este motivo. El shot no se elimina, pasa a estado rechazado.</p>
+            </div>
+            
+            {confirmReject ? (
+              <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                <button 
+                  onClick={handleRejectClick} 
+                  disabled={editLoading} 
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition disabled:opacity-50 text-sm whitespace-nowrap h-[38px] animate-pulse"
+                >
+                  ¿Confirmar?
+                </button>
+                <button 
+                  onClick={() => setConfirmReject(false)} 
+                  className="text-[9px] text-gray-500 hover:text-white transition"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={handleRejectClick} 
+                disabled={editLoading} 
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg transition disabled:opacity-50 text-sm whitespace-nowrap h-[38px] flex-shrink-0"
+              >
+                Rechazar
+              </button>
+            )}
           </div>
         </div>
       </div>

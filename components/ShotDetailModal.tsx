@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { useShotInteractions } from "../lib/useShotInteractions";
@@ -33,6 +34,7 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
   const [currentShot, setCurrentShot] = useState<Shot>(shot);
   const [loadingData, setLoadingData] = useState(true);
   const mobileScrollRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
   
   const { isLiked, likesCount, isLiking, handleLike, isSaved, isSaving, handleSave, viewsCount, handleView, setIsLiked, setIsSaved, setLikesCount, setViewsCount } = useShotInteractions({
     shotId: currentShot.id,
@@ -57,6 +59,8 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
   const isGhost = currentShot?.user_id === GHOST_USER_ID; 
   
   const [curateMode, setCurateMode] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const fetchAllData = async (shotId: string) => {
     setLoadingData(true);
@@ -160,7 +164,7 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
         </button>
       )}
       {isAdmin && curateMode && onDisapprove && (
-        <button onClick={() => onDisapprove(currentShot.id)} className="bg-orange-600 hover:bg-orange-500 text-white rounded-full p-1 shadow transition" title="Archivar (Admin)">
+        <button onClick={() => onDisapprove(currentShot.id)} className="bg-orange-600 hover:bg-orange-500 text-white rounded-full p-1 shadow transition" title="Desaprobar (Admin)">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m6 4.125h2.25m-10.125 0h17.25M5.625 7.5h12.75" /></svg>
         </button>
       )}
@@ -172,13 +176,92 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
       {loadingData ? (
         <div className="text-center text-gray-500 text-xs animate-pulse py-4">Cargando datos...</div>
       ) : !curateMode ? (
-        <>
-          {currentShot.author && <div className="text-base text-yellow-400 font-bold leading-tight">{currentShot.author}</div>}
-          {currentShot.title && <div className="text-sm font-bold text-gray-100 leading-tight">{currentShot.title}</div>}
+        <div className="space-y-2">
+          {/* LAYOUT SPLIT: Autor/Título Izquierda | Interacciones/Perfil Derecha */}
+          <div className="flex justify-between items-start gap-4">
+            {/* LADO IZQUIERDO */}
+            <div className="flex-1 min-w-0 space-y-1">
+              {currentShot.author && <div className="text-base text-yellow-400 font-bold leading-tight">{currentShot.author}</div>}
+              {currentShot.title && <div className="text-sm font-bold text-gray-100 leading-tight">{currentShot.title}</div>}
+            </div>
+            
+            {/* LADO DERECHO */}
+            <div className="flex flex-col items-end gap-2 flex-shrink-0">
+              {/* FILA 1: UOC, Guardar, Like, Stats (Nivel del Autor) */}
+              <div className="flex items-center gap-2">
+                {currentShot.uoc_username && uocActive !== null && (
+                  <button onClick={() => onOpenCollection?.(currentShot.uoc_id!)} className="flex-shrink-0 bg-green-900/20 border border-green-800/30 rounded-md px-2 py-0.5 text-center hover:bg-green-900/40 transition">
+                    <span className="text-[7px] text-green-700 font-bold">UOC</span>
+                    <span className="text-[9px] text-green-500 ml-0.5 italic hover:underline">@{currentShot.uoc_username}</span>
+                  </button>
+                )}
+                
+                {user && (
+                  <button
+                    className={`rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-lg transition-colors ${
+                      isSaved 
+                        ? 'bg-gray-800/60 backdrop-blur-sm border border-yellow-500/70 text-yellow-400' 
+                        : 'bg-pink-500/35 backdrop-blur-sm text-gray-300 hover:bg-pink-500/50'
+                    }`}
+                    disabled={isSaved || isSaving}
+                    onClick={handleSave}
+                  >
+                    {isSaving ? (
+                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    ) : isSaved ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.841-1.672A2.31 2.31 0 0013.86 4H10.14a2.31 2.31 0 00-2.087 1.278l-.84 1.672zM12 16.5a3 3 0 100-6 3 3 0 000 6z" /></svg>
+                    )}
+                  </button>
+                )}
+                
+                {user && (
+                  <button
+                    className={`rounded-full w-[26px] h-[26px] flex items-center justify-center shadow-lg transition-colors ${isLiked ? 'bg-red-500 text-white' : 'bg-white/20 text-white hover:bg-white/30'}`}
+                    onClick={handleLike}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill={isLiked ? "white" : "none"} viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" /></svg>
+                  </button>
+                )}
+                
+                <span className="text-[11px] text-gray-400 font-mono flex items-center gap-2">
+                  <span>❤️{likesCount || 0}</span>
+                  <span>👁️{viewsCount || 0}</span>
+                </span>
+              </div>
+              
+              {/* FILA 2: Avatar, Nombre, Seguidores, Seguir (Nivel del Título) */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-6 h-6 rounded-full bg-gray-700 overflow-hidden flex items-center justify-center text-[10px] font-bold text-white border border-gray-600 flex-shrink-0">
+                    {authorData?.avatar_url && !imgError ? (<img src={authorData.avatar_url} className="w-full h-full object-cover" onError={() => setImgError(true)} />) : (<span>{displayUsername.charAt(0).toUpperCase()}</span>)}
+                  </div>
+                  <div className="text-right min-w-0">
+                    <div className="text-[11px] text-white font-semibold truncate">{displayUsername}</div>
+                    {!isGhost && <div className="text-[9px] text-gray-500">{authorData?.followers_count ?? 0} seg</div>}
+                  </div>
+                </div>
+                
+                {currentUser && !isOwnShot && !isGhost && (
+                  <button onClick={handleToggleFollow} disabled={followLoading} className={`h-[22px] px-2 bg-gray-700 text-yellow-400 border border-yellow-500 rounded-full text-[10px] font-bold transition disabled:opacity-50 flex-shrink-0 ${isFollowing ? 'opacity-60' : 'hover:bg-gray-600'}`}>
+                    {followLoading ? "..." : isFollowing ? "Siguiendo" : "Seguir"}
+                  </button>
+                )}
+                {isGhost && (<span className="text-[8px] bg-yellow-500/10 text-yellow-500 border border-yellow-500/30 px-1.5 py-0.5 rounded font-semibold flex-shrink-0">Archivo</span>)}
+              </div>
+            </div>
+          </div>
+          
+          {/* Descripción */}
           {currentShot.description && <p className="text-xs text-gray-400 whitespace-pre-wrap leading-relaxed">{currentShot.description}</p>}
-        </>
+          
+          {/* EL SEPARADOR - Mantenido vacío para futuros datos */}
+          <div className="mt-2 pt-2 border-t border-gray-800"></div>
+          
+        </div>
       ) : (
-                <CuratePanel 
+        <CuratePanel 
           shot={currentShot} 
           isOwnShot={isOwnShot} 
           isAdmin={isAdmin} 
@@ -187,66 +270,19 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
           onRelinquish={(shotId) => { if (onRelinquish) onRelinquish(shotId); onClose(); }} 
         />
       )}
-
-      {!curateMode && !loadingData && (
-        <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-800 gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-6 h-6 rounded-full bg-gray-700 overflow-hidden flex items-center justify-center text-[9px] font-bold text-white border border-gray-600 flex-shrink-0">
-              {authorData?.avatar_url && !imgError ? (<img src={authorData.avatar_url} className="w-full h-full object-cover" onError={() => setImgError(true)} />) : (<span>{displayUsername.charAt(0).toUpperCase()}</span>)}
-            </div>
-            <div className="text-left min-w-0">
-              <div className="text-[11px] text-white font-semibold truncate">{displayUsername}</div>
-              {!isGhost && <div className="text-[8px] text-gray-500">{authorData?.followers_count ?? 0} seg</div>}
-            </div>
-            
-            {currentUser && !isOwnShot && !isGhost && (
-              <button onClick={handleToggleFollow} disabled={followLoading} className={`h-[22px] px-2 bg-gray-700 text-yellow-400 border border-yellow-500 rounded-full text-[10px] font-bold transition disabled:opacity-50 flex-shrink-0 ${isFollowing ? 'opacity-60' : 'hover:bg-gray-600'}`}>
-                {followLoading ? "..." : isFollowing ? "Siguiendo" : "Seguir"}
-              </button>
-            )}
-            {isGhost && (<span className="text-[8px] bg-yellow-500/10 text-yellow-500 border border-yellow-500/30 px-1.5 py-0.5 rounded font-semibold flex-shrink-0">Archivo</span>)}
-          </div>
-
-          {/* 🆕 UOC MOVIDO AL CENTRO DEL RENGLÓN */}
-          {currentShot.uoc_username && uocActive !== null && (
-            <button onClick={() => onOpenCollection?.(currentShot.uoc_id!)} className="flex-shrink-0 bg-green-900/20 border border-green-800/30 rounded-md px-2 py-0.5 text-center hover:bg-green-900/40 transition">
-              <span className="text-[7px] text-green-700 font-bold">UOC</span>
-              <span className="text-[9px] text-green-500 ml-0.5 italic hover:underline">@{currentShot.uoc_username}</span>
-            </button>
-          )}
-
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {user && (
-              <button className={`rounded-full w-[22px] h-[22px] flex items-center justify-center shadow-lg transition`} style={isSaved ? { background: '#facc15', color: '#fff' } : { background: 'rgba(236, 72, 153, 0.35)', color: '#fff' }} disabled={isSaved || isSaving} onClick={handleSave}>
-                {isSaved ? <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg> : <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7h2l2-3h10l2 3h2a2 2 0 012 2v10a2 2 0 01-2 2H3a2 2 0 01-2-2V9a2 2 0 012-2zm9 4a3 3 0 100 6 3 3 0 000-6z" /></svg>}
-              </button>
-            )}
-            {user && (
-              <button className={`rounded-full w-[22px] h-[22px] flex items-center justify-center shadow-lg transition`} style={isLiked ? { background: '#ef4444', color: '#fff' } : { background: 'rgba(255, 255, 255, 0.2)', color: '#fff' }} onClick={handleLike}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill={isLiked ? "white" : "none"} viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" /></svg>
-              </button>
-            )}
-            <span className="text-[9px] text-gray-500">❤️{likesCount || 0} 👁️{viewsCount || 0}</span>
-          </div>
-        </div>
-      )}
     </>
   );
 
-  return (
+  const ModalContent = (
     <div className="fixed left-0 right-0 bottom-0 z-[60] flex flex-col items-center pt-3 pb-[20px]" style={{ top: '56px', background: 'rgba(10, 24, 51, 0.88)' }}>
         
-      <div className="relative bg-gray-900 rounded-2xl shadow-2xl text-gray-100 w-full md:w-[80vw] mx-auto overflow-hidden border border-gray-700" style={{ maxHeight: '90vh' }}>
+      <div className="relative bg-gray-900 rounded-2xl shadow-2xl text-gray-100 w-full md:w-[80vw] mx-auto overflow-hidden border border-gray-700" style={{ maxHeight: '95vh' }}>
 
-        {/* =========================================
-            LAYOUT ESCRITORIO
-        ========================================= */}
+        {/* LAYOUT ESCRITORIO */}
         <div className="hidden md:flex md:flex-row h-full">
-          {/* Izquierda - Contiene los botones flotantes */}
           <div className="w-[62.5%] flex flex-col border-r border-gray-800 overflow-y-auto custom-scrollbar">
-            {/* 🆕 Contenedor relativo para la imagen y botones */}
-            <div className="relative">
-              <img src={currentShot.image_url} alt="" className="w-full h-auto max-h-[60vh] object-contain bg-gray-950" />
+            <div className="relative pt-4">
+              <img src={currentShot.image_url} alt="" className="w-full h-auto max-h-[65vh] object-contain bg-gray-950" />
               <FloatingButtons />
             </div>
             {currentShot.source_url && (
@@ -257,12 +293,10 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
             </div>
           </div>
 
-          {/* Derecha */}
           <div className="w-[37.5%] bg-gray-950/50 flex flex-col overflow-hidden">
             <div className="px-3 pt-3 pb-2 border-b border-gray-800 flex-shrink-0 flex items-center justify-between gap-2">
               <div className="flex flex-wrap gap-1 min-w-0 flex-1">
                 {currentShot.category_name && (<button onClick={handleCategoryClick} className="px-1 py-0.5 bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-full text-[8px] font-bold hover:bg-blue-600/50 transition cursor-pointer">{currentShot.category_name}</button>)}
-                {/* 🆕 TAGS MÁS CHICOS */}
                 {currentShot.tags?.map(tag => (tag.id ? <button key={tag.id} onClick={() => handleTagClick(tag)} className="px-1 py-0.5 bg-gray-700 text-gray-300 border border-gray-600 rounded-full text-[8px] font-medium hover:bg-gray-600 transition cursor-pointer">{tag.name}</button> : null))}
               </div>
               <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex-shrink-0 ml-2">Relaciones</h4>
@@ -278,13 +312,10 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
           </div>
         </div>
 
-        {/* =========================================
-            LAYOUT MÓVIL
-        ========================================= */}
+        {/* LAYOUT MÓVIL */}
         <div ref={mobileScrollRef} className="flex flex-col md:hidden h-full overflow-y-auto custom-scrollbar">
-          {/* 🆕 Contenedor relativo para la imagen y botones */}
-          <div className="relative">
-            <img src={currentShot.image_url} alt="" className="w-full h-auto object-contain bg-gray-950" />
+          <div className="relative pt-4">
+            <img src={currentShot.image_url} alt="" className="w-full h-auto max-h-[70vh] object-contain bg-gray-950" />
             <FloatingButtons />
           </div>
           {currentShot.source_url && (
@@ -296,7 +327,6 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
           <div className="px-4 pt-2 pb-2 border-t border-gray-800 flex items-center justify-between gap-2 sticky top-0 bg-gray-900 z-10">
             <div className="flex flex-wrap gap-1 min-w-0 flex-1">
               {currentShot.category_name && (<button onClick={handleCategoryClick} className="px-1 py-0.5 bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-full text-[8px] font-bold hover:bg-blue-600/50 transition cursor-pointer">{currentShot.category_name}</button>)}
-              {/* 🆕 TAGS MÁS CHICOS */}
               {currentShot.tags?.map(tag => (tag.id ? <button key={tag.id} onClick={() => handleTagClick(tag)} className="px-1 py-0.5 bg-gray-700 text-gray-300 border border-gray-600 rounded-full text-[8px] font-medium hover:bg-gray-600 transition cursor-pointer">{tag.name}</button> : null))}
             </div>
             <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex-shrink-0 ml-2">Relaciones</h4>
@@ -320,4 +350,7 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
       </div>
     </div>
   );
+
+  if (!mounted) return null;
+  return createPortal(ModalContent, document.body);
 }

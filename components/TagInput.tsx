@@ -14,11 +14,15 @@ interface Props {
   onChange: (tags: Tag[]) => void;
 }
 
+// 🛠️ EXPANDIDO: Añadidas facetas de Obra, Autor y Colección para creación Admin
 const FACET_LABELS: Record<string, string> = {
   typology: "🏛️ Tipología",
   materiality: "🧱 Materialidad",
   geography: "🌎 Geografía",
   concept: "💡 Concepto",
+  author: "👤 Arquitecto/Estudio",
+  collection: "📁 Colección/Tablero",
+  obra: "🏗️ Obra / Proyecto",
   free: "🏷️ Libre",
 };
 
@@ -31,7 +35,9 @@ export default function TagInput({ selectedTags, onChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Cargar todos los tags disponibles al montar
+  // 🆕 Estado para la faceta al crear un nuevo tag
+  const [createFacet, setCreateFacet] = useState<string>('free');
+
   useEffect(() => {
     fetchTags();
   }, []);
@@ -43,7 +49,6 @@ export default function TagInput({ selectedTags, onChange }: Props) {
     setLoading(false);
   };
 
-  // Filtrar sugerencias basadas en la búsqueda
   useEffect(() => {
     if (!search.trim()) {
       setSuggestions(allTags.filter(t => !selectedTags.find(st => st.slug === t.slug)).slice(0, 15));
@@ -59,7 +64,6 @@ export default function TagInput({ selectedTags, onChange }: Props) {
     setSuggestions(filtered);
   }, [search, allTags, selectedTags]);
 
-  // Cerrar dropdown al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) && inputRef.current && !inputRef.current.contains(e.target as Node)) {
@@ -81,18 +85,18 @@ export default function TagInput({ selectedTags, onChange }: Props) {
     onChange(selectedTags.filter(t => t.slug !== slug));
   };
 
-  const handleCreateFreeTag = () => {
+  // 🛠️ ACTUALIZADO: Crear tag con la faceta seleccionada
+  const handleCreateTag = () => {
     if (!search.trim()) return;
     const slug = search.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
-    if (selectedTags.find(t => t.slug === slug)) return; // Ya existe
+    if (selectedTags.find(t => t.slug === slug)) return; 
     
     const newTag: Tag = {
       name: search.trim(),
       slug: slug,
-      facet: 'free'
+      facet: createFacet // Usa la faceta seleccionada
     };
     
-    // Verificar si ya existe en la BD pero no está seleccionado
     const existing = allTags.find(t => t.slug === slug);
     if (existing) {
       handleSelectTag(existing);
@@ -100,6 +104,7 @@ export default function TagInput({ selectedTags, onChange }: Props) {
       onChange([...selectedTags, newTag]);
       setSearch("");
       setShowDropdown(false);
+      setCreateFacet('free'); // Reset
     }
   };
 
@@ -109,12 +114,11 @@ export default function TagInput({ selectedTags, onChange }: Props) {
       if (suggestions.length > 0 && search.trim()) {
         handleSelectTag(suggestions[0]);
       } else if (search.trim()) {
-        handleCreateFreeTag();
+        handleCreateTag();
       }
     }
   };
 
-  // Agrupar sugerencias por faceta para la UI
   const groupedSuggestions = suggestions.reduce((acc, tag) => {
     if (!acc[tag.facet]) acc[tag.facet] = [];
     acc[tag.facet].push(tag);
@@ -124,7 +128,6 @@ export default function TagInput({ selectedTags, onChange }: Props) {
   return (
     <div className="relative w-full">
       
-      {/* Chips de Tags Seleccionados + Input */}
       <div className="flex flex-wrap items-center gap-1.5 w-full min-h-[40px] bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 cursor-text" onClick={() => inputRef.current?.focus()}>
         
         {selectedTags.map(tag => (
@@ -146,7 +149,6 @@ export default function TagInput({ selectedTags, onChange }: Props) {
         />
       </div>
 
-      {/* Dropdown de Sugerencias */}
       {showDropdown && (
         <div ref={dropdownRef} className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl max-h-60 overflow-y-auto custom-scrollbar">
           
@@ -154,7 +156,6 @@ export default function TagInput({ selectedTags, onChange }: Props) {
             <div className="p-3 text-xs text-gray-500 text-center animate-pulse">Cargando etiquetas...</div>
           ) : (
             <>
-              {/* Sugerencias Agrupadas */}
               {Object.entries(groupedSuggestions).map(([facet, tags]) => (
                 <div key={facet}>
                   <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider sticky top-0 bg-gray-800 z-10">
@@ -164,7 +165,7 @@ export default function TagInput({ selectedTags, onChange }: Props) {
                     <button
                       key={tag.id || tag.slug}
                       type="button"
-                      onMouseDown={(e) => e.preventDefault()} // Evitar que el input pierda foco
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => handleSelectTag(tag)}
                       className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 transition flex items-center justify-between"
                     >
@@ -175,17 +176,30 @@ export default function TagInput({ selectedTags, onChange }: Props) {
                 </div>
               ))}
 
-              {/* Crear Tag Libre */}
+              {/* 🛠️ CREACIÓN DE TAGS CON SELECTOR DE FACETA */}
               {search.trim() && !allTags.find(t => t.name.toLowerCase() === search.trim().toLowerCase()) && (
-                <div className="border-t border-gray-600">
+                <div className="border-t border-gray-600 p-2">
+                  <div className="text-[10px] text-gray-400 mb-1.5 uppercase tracking-wider">Crear nueva etiqueta</div>
+                  <div className="flex items-center gap-2 mb-2 bg-gray-700 rounded p-1">
+                    <span className="text-xs text-white font-bold px-2 truncate flex-1">{search.trim()}</span>
+                    <select 
+                      value={createFacet} 
+                      onChange={(e) => setCreateFacet(e.target.value)}
+                      className="bg-gray-600 border border-gray-500 rounded px-2 py-1 text-[10px] text-white focus:outline-none focus:ring-1 focus:ring-yellow-500 flex-shrink-0"
+                    >
+                      {Object.entries(FACET_LABELS).map(([key, label]) => (
+                        <option key={key} value={key}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
                   <button
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={handleCreateFreeTag}
-                    className="w-full text-left px-3 py-2 text-sm text-purple-400 hover:bg-purple-900/20 transition flex items-center gap-2"
+                    onClick={handleCreateTag}
+                    className="w-full text-left px-3 py-2 text-sm text-green-400 hover:bg-green-900/20 transition flex items-center gap-2 rounded"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                    Crear <span className="font-bold">"{search.trim()}"</span> como etiqueta libre
+                    Añadir como <span className="font-bold">{FACET_LABELS[createFacet]}</span>
                   </button>
                 </div>
               )}
