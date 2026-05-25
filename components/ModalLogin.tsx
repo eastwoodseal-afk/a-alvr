@@ -65,16 +65,16 @@ export default function ModalLogin({ open, onClose }: Props) {
   return (
     <div 
       className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[70] px-4"
-      onClick={onClose}
+      // 🛠️ CURA: Eliminado onClick={onClose} del fondo para evitar cierres accidentales
     >
       <div 
         className="relative bg-gray-900 rounded-2xl shadow-2xl p-8 pt-4 w-full max-w-md text-gray-200 border border-gray-700"
         onClick={e => e.stopPropagation()}
       >
-        {/* Botón Cerrar */}
+        {/* Botón Cerrar - Funcional y Estilizado */}
         <div className="flex w-full justify-end mb-4">
           <button 
-            className="bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold shadow transition"
+            className="bg-transparent border-2 border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-black rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold shadow transition"
             onClick={onClose}
           >
             &times;
@@ -103,6 +103,8 @@ export default function ModalLogin({ open, onClose }: Props) {
             <label className="block mb-1 text-sm font-medium text-gray-400">Email</label>
             <input
               type="email"
+              name="email"                     // 🆕 Activa autorelleno
+              autoComplete="email"             // 🆕 Activa autorelleno
               className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
               required
               value={email}
@@ -114,6 +116,8 @@ export default function ModalLogin({ open, onClose }: Props) {
             <label className="block mb-1 text-sm font-medium text-gray-400">Contraseña</label>
             <input
               type="password"
+              name="password"                  // 🆕 Activa autorelleno
+              autoComplete={isRegister ? "new-password" : "current-password"} // 🆕 Dinámico
               className="w-full px-4 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
               required
               value={password}

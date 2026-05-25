@@ -13,7 +13,7 @@ const FACET_LABELS: Record<string, string> = {
   geography: "🌎 Geografía",
   concept: "💡 Concepto",
   free: "🏷️ Libre",
-  value: 'obra', label: '🏗️ Obra / Proyecto' 
+  obra: "🏗️ Obra / Proyecto", // 🛠️ CURA: Sintaxis corregida
 };
 
 interface TagItem {

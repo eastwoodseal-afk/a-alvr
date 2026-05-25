@@ -107,7 +107,8 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
       for (const shot of selectedData) { const obraTag = shot.tags?.find((t: Tag) => t.facet === 'obra'); if (obraTag) { foundObra = obraTag.name; break; } }
       setObraName(foundObra);
     } else { setObraName(""); }
-  }, [selectedShots, viewMode, unassignedShots]);
+    // 🛠️ CURA: Eliminado 'unassignedShots' del array. Como es un .filter(), cambia de referencia en cada render y causaba un loop que pisaba el input.
+  }, [selectedShots, viewMode]);
 
   const obrasByCategory = useMemo(() => {
     const obrasMap = new Map<string, { slug: string; name: string; thumbnail: string; category: string }>();
@@ -197,28 +198,23 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
     setLinkingObra(false);
   };
 
-  // 🆕 HANDLER: Entrar a la vista de Obra desde el Índice
   const handleSelectObraFromIndex = (slug: string) => { 
     setObraFilter(slug); 
-    setViewMode('obra'); // MODO DEDICADO
+    setViewMode('obra');
     setShowObrasOverlay(false); 
   };
 
-  // 🆕 LÓGICA DE RENDERIZADO LIMPIA
   let shotsToRender: Shot[] = [];
-  let viewTitle = 'Shots Guardados'; // Título dinámico
+  let viewTitle = 'Shots Guardados';
   
   if (viewMode === 'all') { 
     // AllSavedShotsView (no cambia)
   } else if (viewMode === 'obra') {
-    // 🆕 VISTA DEDICADA: Todos los shots guardados de esa obra
     shotsToRender = allSavedShots.filter(s => s.tags?.some(t => t.facet === 'obra' && t.slug === obraFilter));
     viewTitle = Object.values(obrasByCategory).flat().find(o => o.slug === obraFilter)?.name || 'Obra Guardada';
   } else if (viewMode === null) {
-    // BANDEJA: Solo no asignados
     shotsToRender = unassignedShots;
   } else {
-    // TABLERO: Shots de un tablero específico
     shotsToRender = boardShots;
     viewTitle = boards.find(b => b.id === viewMode)?.name || 'Tablero';
   }
@@ -263,7 +259,6 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
             </div>
           ) : (
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              {/* 🆕 BACK BUTTON: Vuelve a la Bandeja (null) desde Obra o Tablero */}
               <button onClick={() => { setViewMode(null); setObraFilter(null); }} className="w-7 h-7 rounded-full bg-gray-700 hover:bg-gray-600 text-yellow-500 flex items-center justify-center flex-shrink-0 transition">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
               </button>
@@ -277,7 +272,15 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
           {isObraCellActive && (
             <div className={`flex items-center gap-1.5 bg-gray-800 rounded-full border transition-all duration-200 h-8 border-yellow-500 shadow-sm shadow-yellow-500/20 w-64 px-3`}>
               <span className="text-[10px] bg-yellow-500 text-black font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">{selectedShots.length}</span>
-              <input type="text" placeholder="Vincular a Obra..." className="bg-transparent border-none text-white focus:outline-none placeholder:text-gray-500 flex-1 text-xs" value={obraName} onChange={e => setObraName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLinkObra()} disabled={linkingObra || !isAdmin} />
+              <input 
+                type="text" 
+                placeholder="Vincular a Obra..." 
+                className="bg-transparent border-none text-white focus:outline-none placeholder:text-gray-500 flex-1 text-xs" 
+                value={obraName} 
+                onChange={e => setObraName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleLinkObra()}
+                disabled={linkingObra}
+              />
               <div className="flex items-center gap-1 flex-shrink-0">
                 {isAdmin && ( <button onClick={handleLinkObra} disabled={!obraName.trim() || linkingObra} className="w-5 h-5 rounded-full bg-green-600 hover:bg-green-500 text-white flex items-center justify-center transition disabled:opacity-50" title="Confirmar Obra"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg></button> )}
                 <button onClick={() => { setSelectedShots([]); setObraName(""); }} className="w-5 h-5 rounded-full bg-gray-600 hover:bg-gray-500 text-white flex items-center justify-center transition" title="Cancelar"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
@@ -300,10 +303,8 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
                 <div key={shot.id} className="relative group mb-2">
                   <ShotCard shot={shot} isSaved={true} isSaving={false} onSave={() => {}} hideSave={true} isLiked={likedShots.includes(shot.id)} likesCount={shot.likes_count || 0} isLiking={false} onLike={() => handleLike(shot.id)} viewsCount={shot.views_count || 0} user={currentUser} onClick={() => setSelectedShot(shot)} hideViews={false} />
                   
-                  {/* 🆕 CHECKBOXES: Solo en la Bandeja (null) */}
                   {viewMode === null && (<input type="checkbox" checked={selectedShots.includes(shot.id)} onChange={(e) => setSelectedShots(prev => e.target.checked ? [...prev, shot.id] : prev.filter(id => id !== shot.id))} className="absolute top-2 left-2 z-10 w-5 h-5 accent-yellow-500 bg-gray-800 border-gray-600 rounded cursor-pointer" />)}
                   
-                  {/* 🆕 REMOVE BUTTON: Solo en Tableros (no en Obra) */}
                   {viewMode !== null && viewMode !== 'obra' && (<button onClick={async () => { await supabase.from('board_shots').delete().match({ board_id: viewMode, shot_id: shot.id }); setBoardShots(prev => prev.filter(s => s.id !== shot.id)); setShotsInBoards(prev => prev.filter(id => id !== shot.id)); setBoards(prev => prev.map(b => b.id === viewMode ? { ...b, shot_count: Math.max(0, (b.shot_count || 1) - 1) } : b)); }} className="absolute top-2 left-2 z-10 bg-red-600/80 hover:bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity shadow">&times;</button>)}
                 </div>
               ))}
