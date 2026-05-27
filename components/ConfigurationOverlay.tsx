@@ -23,7 +23,6 @@ export default function ConfigurationOverlay({ onClose }: Props) {
   const [passwordError, setPasswordError] = useState("");
   const [passwordLoading, setPasswordLoading] = useState(false);
 
-  // NUEVOS ESTADOS PARA BORRAR CUENTA
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -33,8 +32,6 @@ export default function ConfigurationOverlay({ onClose }: Props) {
     setEmail(user?.email || "");
   }, [user]);
 
-  // ... (Funciones handleSave y handleChangePassword se quedan exactamente igual) ...
-  
   async function handleSave() {
     setSaving(true); setError(""); setSuccess("");
     if (!user) { setSaving(false); setError("No hay usuario."); return; }
@@ -61,7 +58,6 @@ export default function ConfigurationOverlay({ onClose }: Props) {
       .catch(() => { setPasswordLoading(false); setPasswordError("Error crítico."); });
   }
 
-  // 🚀 NUEVA FUNCIÓN: ELIMINAR CUENTA
   const handleDeleteAccount = async () => {
     setDeleting(true); setDeleteError("");
     try {
@@ -77,7 +73,6 @@ export default function ConfigurationOverlay({ onClose }: Props) {
       const data = await res.json();
       
       if (res.ok && data.success) {
-        // La cuenta se borró en el servidor. Cerramos sesión localmente.
         await supabase.auth.signOut();
         onClose();
         router.push('/');
@@ -94,7 +89,6 @@ export default function ConfigurationOverlay({ onClose }: Props) {
   return (
     <div className="fixed top-14 left-0 right-0 bottom-0 z-[60] bg-gray-950 flex flex-col overflow-y-auto custom-scrollbar">
       
-      {/* Botón Regresar */}
       <div className="flex-shrink-0 flex items-center px-4 py-3 border-b border-gray-800 bg-gray-900/50 h-10">
         <button onClick={onClose} className="w-7 h-7 rounded-full bg-gray-700 hover:bg-gray-600 text-yellow-500 flex items-center justify-center flex-shrink-0 transition mr-3">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
@@ -104,7 +98,6 @@ export default function ConfigurationOverlay({ onClose }: Props) {
 
       <div className="w-full max-w-lg mx-auto p-4 pt-6 flex-1">
 
-        {/* Sección Usuario/Email (Igual que antes) */}
         <div className="bg-gray-900 rounded-xl border border-gray-800 shadow-lg p-5 mb-6">
           <div className="mb-4">
             <label className="block text-xs mb-1 text-gray-400">Usuario</label>
@@ -121,9 +114,8 @@ export default function ConfigurationOverlay({ onClose }: Props) {
           </button>
         </div>
 
-        {/* Sección Seguridad (Igual que antes) */}
         <div className="bg-gray-900 rounded-xl border border-gray-800 shadow-lg p-5 mb-6">
-          <h3 className="text-sm font-semibold mb-4 text-white">Seguridad</h3>
+          <h3 className="text-sm font-semibold mb-4 text-white">Securidad</h3>
           {!showPasswordForm ? (
             <button className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded text-xs transition" onClick={() => { setShowPasswordForm(true); setPasswordError(""); }}>
               Cambiar contraseña
@@ -144,12 +136,8 @@ export default function ConfigurationOverlay({ onClose }: Props) {
           )}
         </div>
 
-        {/* 🚀 NUEVA SECCIÓN: ZONA DE PELIGRO */}
         <div className="bg-red-950/20 rounded-xl border border-red-900/50 shadow-lg p-5 mb-6">
-          <h3 className="text-lg font-semibold mb-2 text-red-400">Eliminar cuenta</h3>
-          <p className="text-sm text-gray-400 mb-4">
-            Al eliminar tu cuenta, tus shots pasarán al acervo del Ateneo (registro eterno), tu perfil será desactivado y perderás el acceso permanentemente.
-          </p>
+          <h3 className="text-lg font-semibold mb-4 text-red-400">Eliminar cuenta</h3>
           
           {deleteError && <div className="text-red-400 text-xs text-center mb-3">{deleteError}</div>}
 
@@ -163,7 +151,7 @@ export default function ConfigurationOverlay({ onClose }: Props) {
           ) : (
             <div className="space-y-3 animate-fade-in">
               <div className="w-full text-[11px] text-red-300 bg-red-900/40 border border-red-800/60 rounded px-3 py-2 text-center">
-                ⚠️ Acción irreversible. Tus shots quedarán en el museo, pero tu identidad será borrada. ¿Continuar?
+                ⚠️ Acción irreversible. Perderás el acceso a esta cuenta permanentemente. ¿Continuar?
               </div>
               <div className="flex gap-2">
                 <button 

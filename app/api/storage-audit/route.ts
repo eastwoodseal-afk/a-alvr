@@ -2,6 +2,8 @@ export const runtime = 'nodejs';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 
+const GHOST_USER_ID = '9e717b49-395c-48d2-add9-7a60ab9c7baf';
+
 const getSupabaseAdmin = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -40,7 +42,8 @@ export async function POST(req: NextRequest) {
       likes_count: s.likes_count || 0,
       views_count: s.views_count || 0,
       saved_count: s.saved_shots?.length || 0,
-      is_rejected: s.is_rejected
+      is_rejected: s.is_rejected,
+      is_approved: s.is_approved
     });
 
     shots?.forEach(s => {
@@ -82,7 +85,7 @@ export async function POST(req: NextRequest) {
     // 4. SOLO RECHAZADOS
     const rejectedShots = shots?.filter(s => s.is_rejected === true).map(formatShot) || [];
 
-    // 5. GHOST SHOTS
+    // 5. GHOST SHOTS (Sin archivo físico)
     const ghostShots = shots?.filter(s => {
       try {
         const url = new URL(s.image_url);
@@ -94,22 +97,39 @@ export async function POST(req: NextRequest) {
       return false;
     }).map(formatShot) || [];
 
-    // CURA: ID DEL FANTASMA CORREGIDO
-    const GHOST_USER_ID = '9e717b49-395c-48d2-add9-7a60ab9c7baf'; 
+    // 6. ABANDONADOS (Ghost + Rechazado + No Aprobado)
     const abandonedShots = shots?.filter(s => 
       (s.user_id === GHOST_USER_ID || !s.user_id) && s.is_approved === false && s.is_rejected === true
     ).map(formatShot) || [];
+
+    // 7. GHOST PENDIENTES (Ghost + No Aprobado + No Rechazado = El Limbo)
+    const ghostPending = shots?.filter(s => 
+      (s.user_id === GHOST_USER_ID || !s.user_id) && s.is_approved === false && s.is_rejected !== true
+    ).map(formatShot) || [];
+
+    // 8. URLS EXTERNAS (Fósiles)
+    const supabaseDomain = process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname : 'supabase.co';
+    const externalUrls = shots?.filter(s => {
+      try {
+        const url = new URL(s.image_url);
+        return !url.hostname.includes(supabaseDomain);
+      } catch {
+        return true; 
+      }
+    }).map(formatShot) || [];
+
+    // 🆕 9. TODOS LOS SHOTS DEL FANTASMA (Para cotejo)
+    const allGhostShots = shots?.filter(s => s.user_id === GHOST_USER_ID).map(formatShot) || [];
 
     return NextResponse.json({ 
       orphans, 
       rejectedShots,
       ghostShots,
       abandonedShots,
-      totalBucketFiles,
-      debug: {
-        sampleDbPaths: Array.from(dbUserIdFilename.keys()).slice(0, 5),
-        sampleBucketPaths: Array.from(bucketPaths).slice(0, 5),
-      }
+      ghostPending,
+      externalUrls,
+      allGhostShots,
+      totalBucketFiles
     });
 
   } catch (err: any) {
@@ -118,7 +138,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// 🛠️ DELETE MEJORADO: Ahora elimina Archivos (path) O Registros de BD (shotId)
+// DELETE (Sin cambios)
 export async function DELETE(req: NextRequest) {
   try {
     const { accessToken, path, shotId } = await req.json();
@@ -131,18 +151,15 @@ export async function DELETE(req: NextRequest) {
     const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single();
     if (profile?.role !== 'superadmin') return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 });
 
-    // MODO 1: Eliminar archivo huérfano del Storage
     if (path) {
       const { error: deleteError } = await supabaseAdmin.storage.from('shots').remove([path]);
       if (deleteError) throw deleteError;
     }
 
-    // MODO 2: Eliminar registro de la Base de Datos (Abandonados/Rechazados)
     if (shotId) {
       const numericId = parseInt(shotId);
       if (isNaN(numericId)) return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
       
-      // Opcional pero recomendado: borrar el archivo físico también si existe
       const { data: shotData } = await supabaseAdmin.from('shots').select('image_url').eq('id', numericId).single();
       if (shotData?.image_url) {
         try {
@@ -153,7 +170,6 @@ export async function DELETE(req: NextRequest) {
         } catch (e) { console.warn("No se pudo borrar el archivo físico del shot eliminado."); }
       }
 
-      // Borrar el registro de la BD
       const { error: dbError } = await supabaseAdmin.from('shots').delete().eq('id', numericId);
       if (dbError) throw dbError;
     }
@@ -161,5 +177,33 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Error al borrar' }, { status: 500 });
+  }
+}
+
+// PATCH: ADOPTAR SHOT (Sin cambios)
+export async function PATCH(req: NextRequest) {
+  try {
+    const { accessToken, shotId } = await req.json();
+    if (!accessToken || !shotId) return NextResponse.json({ error: 'Faltan datos' }, { status: 400 });
+
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(accessToken);
+    if (authError || !user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+
+    const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single();
+    if (profile?.role !== 'superadmin') return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 });
+
+    const { error: updateError } = await supabaseAdmin
+      .from('shots')
+      .update({ user_id: user.id })
+      .eq('id', shotId);
+
+    if (updateError) throw updateError;
+
+    return NextResponse.json({ success: true });
+
+  } catch (err: any) {
+    console.error("💥 Error adoptando shot:", err);
+    return NextResponse.json({ error: err.message || 'Error al adoptar' }, { status: 500 });
   }
 }

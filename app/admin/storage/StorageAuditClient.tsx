@@ -8,6 +8,7 @@ interface ShotItem {
   id: string; image_url: string; title?: string; author?: string; 
   username?: string; created_at?: string; likes_count?: number; 
   views_count?: number; saved_count?: number; is_rejected?: boolean | null; 
+  is_approved?: boolean | null;
 }
 
 export default function StorageAuditClient() {
@@ -28,8 +29,12 @@ export default function StorageAuditClient() {
   
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [deletingShotId, setDeletingShotId] = useState<string | null>(null);
+  const [adoptingShotId, setAdoptingShotId] = useState<string | null>(null);
   
   const [abandonedShots, setAbandonedShots] = useState<ShotItem[]>([]);
+  const [ghostPending, setGhostPending] = useState<ShotItem[]>([]);
+  const [externalUrls, setExternalUrls] = useState<ShotItem[]>([]);
+  const [allGhostShots, setAllGhostShots] = useState<ShotItem[]>([]); // 🆕
 
   useEffect(() => { checkExistingSession(); }, []);
 
@@ -70,6 +75,9 @@ export default function StorageAuditClient() {
       setGhostShots(data.ghostShots || []);
       setTotalBucketFiles(data.totalBucketFiles || 0);
       setAbandonedShots(data.abandonedShots || []);
+      setGhostPending(data.ghostPending || []);
+      setExternalUrls(data.externalUrls || []);
+      setAllGhostShots(data.allGhostShots || []); // 🆕
     } catch (err: any) { setAuditError(err.message); } 
     finally { setLoading(false); }
   };
@@ -101,12 +109,38 @@ export default function StorageAuditClient() {
       if (res.ok) {
         setAbandonedShots(prev => prev.filter(s => s.id !== shotId));
         setRejectedShots(prev => prev.filter(s => s.id !== shotId));
+        setGhostPending(prev => prev.filter(s => s.id !== shotId));
+        setExternalUrls(prev => prev.filter(s => s.id !== shotId));
+        setAllGhostShots(prev => prev.filter(s => s.id !== shotId)); // 🆕
       } else {
         const data = await res.json();
         alert(data.error || "Error al eliminar el shot.");
       }
     } catch { alert("Error de red."); } 
     finally { setDeletingShotId(null); }
+  };
+
+  const handleAdoptShot = async (shotId: string) => {
+    if (!session) return;
+    setAdoptingShotId(shotId);
+    try {
+      const res = await fetch('/api/storage-audit', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: session.access_token, shotId })
+      });
+      if (res.ok) {
+        setGhostPending(prev => prev.filter(s => s.id !== shotId));
+        setAbandonedShots(prev => prev.filter(s => s.id !== shotId));
+        setExternalUrls(prev => prev.filter(s => s.id !== shotId));
+        setRejectedShots(prev => prev.filter(s => s.id !== shotId));
+        setAllGhostShots(prev => prev.filter(s => s.id !== shotId)); // 🆕
+      } else {
+        const data = await res.json();
+        alert(data.error || "Error al adoptar el shot.");
+      }
+    } catch { alert("Error de red."); } 
+    finally { setAdoptingShotId(null); }
   };
 
   if (authLoading) {
@@ -144,17 +178,32 @@ export default function StorageAuditClient() {
         </div>
       </div>
 
-      <div className="grid grid-cols-5 gap-2 mb-6">
+      <div className="grid grid-cols-8 gap-2 mb-6">
         <StatCard label="Bucket" value={totalBucketFiles} color="blue" />
         <StatCard label="Huérfanos" value={orphans.length} color="red" />
         <StatCard label="Rechazados" value={rejectedShots.length} color="orange" />
         <StatCard label="Abandonados" value={abandonedShots.length} color="purple" />
         <StatCard label="Ghost" value={ghostShots.length} color="gray" />
+        <StatCard label="Ghost Pend." value={ghostPending.length} color="yellow" />
+        <StatCard label="URLs Ext." value={externalUrls.length} color="pink" />
+        <StatCard label="Total Fantasma" value={allGhostShots.length} color="indigo" /> {/* 🆕 */}
       </div>
 
-      {/* 🛠️ CIRUGÍA: Bloque Debug extirpado por completo */}
-
       {auditError && <div className="bg-red-900/30 text-red-400 p-2 rounded text-[10px] mb-4 border border-red-800">{auditError}</div>}
+
+      <Section title="👻 Ghost + No Aprobados (El Limbo)" count={ghostPending.length}>
+        <p className="text-[9px] text-yellow-500 mb-2 italic">Shots del Fantasma que nunca fueron aprobados ni rechazados. Invisibles en la app.</p>
+        <div className="columns-4 md:columns-6 lg:columns-8 gap-2 w-full">
+          {ghostPending.map(s => <AuditShotCard key={s.id} shot={s} onDelete={handleDeleteShot} onAdopt={handleAdoptShot} isDeleting={deletingShotId === s.id} isAdopting={adoptingShotId === s.id} />)}
+        </div>
+      </Section>
+
+      <Section title="🔗 URLs Externas (Fósiles)" count={externalUrls.length}>
+        <p className="text-[9px] text-pink-500 mb-2 italic">Shots que dependen de servidores externos. Si el servidor externo cae, la imagen desaparece del Ateneo.</p>
+        <div className="columns-4 md:columns-6 lg:columns-8 gap-2 w-full">
+          {externalUrls.map(s => <AuditShotCard key={s.id} shot={s} onDelete={handleDeleteShot} onAdopt={handleAdoptShot} isDeleting={deletingShotId === s.id} isAdopting={adoptingShotId === s.id} />)}
+        </div>
+      </Section>
 
       <Section title="🔴 Huérfanos (Solo en Bucket)" count={orphans.length}>
         <div className="columns-4 md:columns-6 lg:columns-8 gap-2 w-full">
@@ -162,11 +211,7 @@ export default function StorageAuditClient() {
             <div key={o.path} className="relative mb-2 break-inside-avoid rounded-lg overflow-hidden border border-red-900/40 group bg-gray-900">
               <img src={o.url} className="w-full h-auto object-cover" />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                <button 
-                  onClick={() => handleDeleteOrphan(o.path)} 
-                  disabled={deletingPath === o.path} 
-                  className="bg-red-600 hover:bg-red-500 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg shadow-lg transition disabled:opacity-50"
-                >
+                <button onClick={() => handleDeleteOrphan(o.path)} disabled={deletingPath === o.path} className="bg-red-600 hover:bg-red-500 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg shadow-lg transition disabled:opacity-50">
                   {deletingPath === o.path ? '...' : '🗑️'}
                 </button>
               </div>
@@ -181,20 +226,13 @@ export default function StorageAuditClient() {
 
       <Section title="🟠 Rechazados (is_rejected = true)" count={rejectedShots.length}>
         <div className="columns-4 md:columns-6 lg:columns-8 gap-2 w-full">
-          {rejectedShots.map(s => <AuditShotCard key={s.id} shot={s} />)}
+          {rejectedShots.map(s => <AuditShotCard key={s.id} shot={s} onDelete={handleDeleteShot} isDeleting={deletingShotId === s.id} />)}
         </div>
       </Section>
 
       <Section title="💀 Abandonados (Ghost + Rechazado + No Aprobado)" count={abandonedShots.length}>
         <div className="columns-4 md:columns-6 lg:columns-8 gap-2 w-full">
-          {abandonedShots.map(s => (
-            <AuditShotCard 
-              key={s.id} 
-              shot={s} 
-              onDelete={handleDeleteShot} 
-              isDeleting={deletingShotId === s.id} 
-            />
-          ))}
+          {abandonedShots.map(s => <AuditShotCard key={s.id} shot={s} onDelete={handleDeleteShot} isDeleting={deletingShotId === s.id} />)}
         </div>
       </Section>
 
@@ -204,12 +242,44 @@ export default function StorageAuditClient() {
         </div>
       </Section>
 
+      {/* 🆕 SECCIÓN DE COTEO COMPLETO */}
+      <Section title="👤 Todos los Shots del Fantasma (Cotejo)" count={allGhostShots.length}>
+        <p className="text-[9px] text-indigo-500 mb-2 italic">Vista completa de todo lo que pertenece al Usuario Fantasma en la base de datos, sin importar su estado.</p>
+        <div className="columns-4 md:columns-6 lg:columns-8 gap-2 w-full">
+          {allGhostShots.map(s => {
+            let statusColor = "border-gray-600";
+            let statusText = "Aprobado";
+            if (s.is_rejected) { statusColor = "border-red-500"; statusText = "Rechazado"; }
+            else if (!s.is_approved) { statusColor = "border-yellow-500"; statusText = "Pendiente"; }
+            
+            return (
+              <div key={s.id} className={`relative mb-2 break-inside-avoid rounded-lg overflow-hidden border ${statusColor} group bg-gray-900`}>
+                <img src={s.image_url} className="w-full h-auto object-cover" />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                  <button onClick={() => handleAdoptShot(s.id)} disabled={adoptingShotId === s.id} className="bg-blue-600 hover:bg-blue-500 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg shadow-lg transition disabled:opacity-50" title="Adoptar">
+                    {adoptingShotId === s.id ? '...' : '🤝'}
+                  </button>
+                  <button onClick={() => handleDeleteShot(s.id)} disabled={deletingShotId === s.id} className="bg-red-600 hover:bg-red-500 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg shadow-lg transition disabled:opacity-50" title="Eliminar">
+                    {deletingShotId === s.id ? '...' : '🗑️'}
+                  </button>
+                </div>
+                <div className="absolute top-1 right-1 bg-black/70 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">{statusText}</div>
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-2 pointer-events-none">
+                  <div className="text-[11px] text-white font-bold truncate">{s.title || "Sin título"}</div>
+                  <div className="text-[10px] text-yellow-400 truncate">{s.author || "?"}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Section>
+
     </div>
   );
 }
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
-  const colors: any = { blue: 'text-blue-400', orange: 'text-orange-400', red: 'text-red-400', purple: 'text-purple-400', gray: 'text-gray-400' };
+  const colors: any = { blue: 'text-blue-400', orange: 'text-orange-400', red: 'text-red-400', purple: 'text-purple-400', gray: 'text-gray-400', yellow: 'text-yellow-400', pink: 'text-pink-400', indigo: 'text-indigo-400' };
   return <div className="bg-gray-900 p-2 rounded border border-gray-800 text-center"><div className={`text-lg font-bold ${colors[color]}`}>{value}</div><div className="text-[8px] text-gray-600 uppercase">{label}</div></div>;
 }
 
@@ -222,8 +292,7 @@ function Section({ title, count, children }: { title: string; count: number; chi
   );
 }
 
-// 🛠️ TIPOGRAFÍA AUMENTADA PARA LEGIBILIDAD
-function AuditShotCard({ shot, isGhost, onDelete, isDeleting }: { shot: ShotItem; isGhost?: boolean; onDelete?: (id: string) => void; isDeleting?: boolean }) {
+function AuditShotCard({ shot, isGhost, onDelete, onAdopt, isDeleting, isAdopting }: { shot: ShotItem; isGhost?: boolean; onDelete?: (id: string) => void; onAdopt?: (id: string) => void; isDeleting?: boolean; isAdopting?: boolean }) {
   return (
     <div className="relative mb-2 break-inside-avoid rounded-lg overflow-hidden border border-gray-800 group bg-gray-900">
       {isGhost ? (
@@ -232,15 +301,18 @@ function AuditShotCard({ shot, isGhost, onDelete, isDeleting }: { shot: ShotItem
         <img src={shot.image_url} className="w-full h-auto object-cover" />
       )}
       
-      {onDelete && (
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-          <button 
-            onClick={() => onDelete(shot.id)} 
-            disabled={isDeleting} 
-            className="bg-red-600 hover:bg-red-500 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg shadow-lg transition disabled:opacity-50"
-          >
-            {isDeleting ? '...' : '🗑️'}
-          </button>
+      {(onDelete || onAdopt) && (
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+          {onAdopt && (
+            <button onClick={() => onAdopt(shot.id)} disabled={isAdopting} className="bg-blue-600 hover:bg-blue-500 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg shadow-lg transition disabled:opacity-50" title="Adoptar (Transferir a mi cuenta)">
+              {isAdopting ? '...' : '🤝'}
+            </button>
+          )}
+          {onDelete && (
+            <button onClick={() => onDelete(shot.id)} disabled={isDeleting} className="bg-red-600 hover:bg-red-500 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg shadow-lg transition disabled:opacity-50" title="Eliminar Registro">
+              {isDeleting ? '...' : '🗑️'}
+            </button>
+          )}
         </div>
       )}
 
