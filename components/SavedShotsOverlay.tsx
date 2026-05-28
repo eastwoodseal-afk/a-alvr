@@ -224,7 +224,7 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
   let viewTitle = 'Shots Guardados';
   
   if (viewMode === 'all') { 
-    // AllSavedShotsView (no cambia)
+    // AllSavedShotsView maneja esta vista
   } else if (viewMode === 'obra') {
     shotsToRender = allSavedShots.filter(s => s.tags?.some(t => t.facet === 'obra' && t.slug === obraFilter));
     viewTitle = Object.values(obrasByCategory).flat().find(o => o.slug === obraFilter)?.name || 'Obra Guardada';
@@ -264,7 +264,7 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
         
         <div className="w-full flex items-center justify-between px-4 py-3 sticky top-0 bg-[rgba(20,20,20,0.95)] z-10 border-b border-yellow-500">
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            {/* 🛠️ CURA: Si estamos en la raíz (null o all), cerramos. Si no, navegamos atrás */}
+            
             <button 
               onClick={() => { 
                 if (viewMode === null || viewMode === 'all') onClose(); 
