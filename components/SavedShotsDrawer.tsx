@@ -20,15 +20,16 @@ interface Props {
   onCreateBoard: (name: string) => Promise<void>;
   onDepositToBoard: (boardId: string) => void;
   onDeleteBoard: (boardId: string) => Promise<void>;
+  onRemoveFromSaved: () => void; // 🆕 PROP
+  removingFromSaved: boolean; // 🆕 PROP
 }
 
 export default function SavedShotsDrawer({ 
   isOpen, onClose, viewMode, obraFilter, boards, loadingBoards, obrasCount, 
   selectedShotsCount, depositing, userId, onNavigate, onOpenObras, 
-  onCreateBoard, onDepositToBoard, onDeleteBoard 
+  onCreateBoard, onDepositToBoard, onDeleteBoard, onRemoveFromSaved, removingFromSaved 
 }: Props) {
   
-  // 🆕 MICRO-ESTADOS LOCALES (Aquí viven, ya no ensucian el Overlay)
   const [boardName, setBoardName] = useState("");
   const [creating, setCreating] = useState(false);
   const [confirmDeleteBoardId, setConfirmDeleteBoardId] = useState<string | null>(null);
@@ -115,8 +116,24 @@ export default function SavedShotsDrawer({
         </div>
       </div>
       
+      {/* 🆕 ACCIÓN MASIVA: DESGUARDAR */}
       {selectedShotsCount > 0 && viewMode === null && (
-        <div className="px-4 py-3 bg-gray-800 border-t border-gray-700 text-xs text-center text-yellow-400 font-bold">Selecciona un tablero para depositar {selectedShotsCount} shot(s)</div>
+        <div className="px-4 py-3 bg-gray-800 border-t border-red-900/50 text-xs text-center">
+          <button 
+            onClick={onRemoveFromSaved}
+            disabled={removingFromSaved}
+            className="w-full py-2 px-3 rounded-lg font-bold text-sm transition flex items-center justify-center gap-2 bg-red-600/20 text-red-400 hover:bg-red-600/40 border border-red-500/30 disabled:opacity-50"
+          >
+            {removingFromSaved ? "Eliminando..." : `Quitar ${selectedShotsCount} de Guardados`}
+          </button>
+        </div>
+      )}
+      
+      {/* DEPÓSITO A TABLERO */}
+      {selectedShotsCount > 0 && viewMode === null && (
+        <div className="px-4 py-3 bg-gray-800 border-t border-gray-700 text-xs text-center text-yellow-400 font-bold">
+          Selecciona un tablero para depositar {selectedShotsCount} shot(s)
+        </div>
       )}
     </div>
   );

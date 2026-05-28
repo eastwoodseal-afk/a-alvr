@@ -115,7 +115,7 @@ export default function ConfigurationOverlay({ onClose }: Props) {
         </div>
 
         <div className="bg-gray-900 rounded-xl border border-gray-800 shadow-lg p-5 mb-6">
-          <h3 className="text-sm font-semibold mb-4 text-white">Securidad</h3>
+          <h3 className="text-sm font-semibold mb-4 text-white">Seguridad</h3>
           {!showPasswordForm ? (
             <button className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded text-xs transition" onClick={() => { setShowPasswordForm(true); setPasswordError(""); }}>
               Cambiar contraseña

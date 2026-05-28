@@ -43,6 +43,7 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
   const [linkingObra, setLinkingObra] = useState(false);
   const [obraFilter, setObraFilter] = useState<string | null>(null);
   const [showObrasOverlay, setShowObrasOverlay] = useState(false);
+  const [removingFromSaved, setRemovingFromSaved] = useState(false);
 
   const isAdmin = currentUser?.actualRole === 'admin' || currentUser?.actualRole === 'superadmin';
 
@@ -107,7 +108,6 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
       for (const shot of selectedData) { const obraTag = shot.tags?.find((t: Tag) => t.facet === 'obra'); if (obraTag) { foundObra = obraTag.name; break; } }
       setObraName(foundObra);
     } else { setObraName(""); }
-    // 🛠️ CURA: Eliminado 'unassignedShots' del array. Como es un .filter(), cambia de referencia en cada render y causaba un loop que pisaba el input.
   }, [selectedShots, viewMode]);
 
   const obrasByCategory = useMemo(() => {
@@ -186,6 +186,22 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
     else await supabase.from("likes").insert({ user_id: currentUser.id, shot_id: shotId }); 
   };
 
+  const handleRemoveFromSaved = async () => {
+    if (!userId || selectedShots.length === 0 || removingFromSaved) return;
+    setRemovingFromSaved(true);
+
+    try {
+      const { error: savedError } = await supabase.from('saved_shots').delete().eq('user_id', userId).in('shot_id', selectedShots);
+      if (savedError) throw savedError;
+      setAllSavedShots(prev => prev.filter(s => !selectedShots.includes(s.id)));
+      setSelectedShots([]); 
+    } catch (err) {
+      alert("Error al quitar los shots de guardados.");
+    } finally {
+      setRemovingFromSaved(false);
+    }
+  };
+
   const handleLinkObra = async () => {
     if (!obraName.trim() || selectedShots.length === 0 || !isAdmin) return;
     setLinkingObra(true);
@@ -234,38 +250,50 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
         obrasCount={Object.values(obrasByCategory).flat().length}
         selectedShotsCount={selectedShots.length}
         depositing={depositing}
-                userId={userId ?? null}
+        userId={userId ?? null}
         onNavigate={handleNavigate}
         onOpenObras={() => { setDrawerOpen(false); setShowObrasOverlay(true); }}
         onCreateBoard={handleCreateBoard}
         onDepositToBoard={handleDepositToBoard}
         onDeleteBoard={handleDeleteBoard}
+        onRemoveFromSaved={handleRemoveFromSaved}
+        removingFromSaved={removingFromSaved}
       />
 
       <div className="flex-1 flex flex-col relative" style={{ background: 'rgba(20,20,20,0.95)' }}>
         
         <div className="w-full flex items-center justify-between px-4 py-3 sticky top-0 bg-[rgba(20,20,20,0.95)] z-10 border-b border-yellow-500">
-          {viewMode === 'all' ? (
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <span className="text-xl font-bold text-yellow-400">{currentUser?.id === userId ? 'Colección' : 'Perfil de'}</span>
-              <div className="flex flex-col justify-center border-l border-gray-600 pl-3">
-                <span className="text-sm text-white font-bold leading-tight">{profileData?.username || "Usuario"}</span>
-                <span className="text-[10px] text-gray-400">{profileData?.followers_count ?? 0} seguidores</span>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {/* 🛠️ CURA: Si estamos en la raíz (null o all), cerramos. Si no, navegamos atrás */}
+            <button 
+              onClick={() => { 
+                if (viewMode === null || viewMode === 'all') onClose(); 
+                else { setViewMode(null); setObraFilter(null); } 
+              }} 
+              className="w-7 h-7 rounded-full bg-gray-700 hover:bg-gray-600 text-yellow-500 flex items-center justify-center flex-shrink-0 transition"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+            </button>
+            
+            {viewMode === 'all' ? (
+              <div className="flex items-center gap-3">
+                <span className="text-xl font-bold text-yellow-400">{currentUser?.id === userId ? 'Colección' : 'Perfil de'}</span>
+                <div className="flex flex-col justify-center border-l border-gray-600 pl-3">
+                  <span className="text-sm text-white font-bold leading-tight">{profileData?.username || "Usuario"}</span>
+                  <span className="text-[10px] text-gray-400">{profileData?.followers_count ?? 0} seguidores</span>
+                </div>
+                <div className="w-9 h-9 rounded-full bg-gray-700 overflow-hidden flex items-center justify-center text-xs font-bold text-white border border-gray-600">
+                  {profileData?.avatar_url ? <img src={profileData.avatar_url} className="w-full h-full object-cover" alt="Avatar" /> : (profileData?.username || "?").charAt(0).toUpperCase()}
+                </div>
+                <div className="border-l border-gray-600 pl-3 flex items-center gap-1.5"><span className="text-xs text-gray-400">Siguiendo</span><span className="text-sm text-white font-bold">{profileData?.following_count ?? 0}</span></div>
               </div>
-              <div className="w-9 h-9 rounded-full bg-gray-700 overflow-hidden flex items-center justify-center text-xs font-bold text-white border border-gray-600">
-                {profileData?.avatar_url ? <img src={profileData.avatar_url} className="w-full h-full object-cover" alt="Avatar" /> : (profileData?.username || "?").charAt(0).toUpperCase()}
-              </div>
-              <div className="border-l border-gray-600 pl-3 flex items-center gap-1.5"><span className="text-xs text-gray-400">Siguiendo</span><span className="text-sm text-white font-bold">{profileData?.following_count ?? 0}</span></div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <button onClick={() => { setViewMode(null); setObraFilter(null); }} className="w-7 h-7 rounded-full bg-gray-700 hover:bg-gray-600 text-yellow-500 flex items-center justify-center flex-shrink-0 transition">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
-              </button>
-              <h2 className="text-sm font-semibold text-gray-200 truncate">{viewTitle}</h2>
-              {selectedShots.length > 0 && viewMode === null && <span className="text-xs text-yellow-400 font-bold">({selectedShots.length} selec.)</span>}
-            </div>
-          )}
+            ) : (
+              <>
+                <h2 className="text-sm font-semibold text-gray-200 truncate">{viewTitle}</h2>
+                {selectedShots.length > 0 && viewMode === null && <span className="text-xs text-yellow-400 font-bold">({selectedShots.length} selec.)</span>}
+              </>
+            )}
+          </div>
 
           <div className="flex-1" />
 
