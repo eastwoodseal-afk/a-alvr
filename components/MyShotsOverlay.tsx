@@ -7,11 +7,11 @@ import ShotCard from "./ShotCard";
 import ShotDetailModal from "./ShotDetailModal";
 import PublicCollectionOverlay from "./PublicCollectionOverlay";
 import ShareStudioModal from "./ShareStudioModal";
-import ModalCreateShot from "./ModalCreateShot"; // 🆕 IMPORT
+import ModalCreateShot from "./ModalCreateShot";
 import { batchLinkObra } from "../lib/tagUtils";
 
 interface Shot { 
-  id: string; title?: string; image_url: string; author?: string; likes_count?: number; views_count?: number; user_id?: string; username?: string; is_approved?: boolean; description?: string;
+  id: string; title?: string; image_url: string; author?: string; likes_count?: number; views_count?: number; user_id?: string; username?: string; is_approved?: boolean; description?: string; is_rejected?: boolean;
 }
 
 const BATCH_SIZE = 20;
@@ -42,9 +42,12 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
   const [obraName, setObraName] = useState("");
   const [linkingObra, setLinkingObra] = useState(false);
 
-  // 🆕 ESTADOS PARA MENÚ DE CREACIÓN
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [modalSection, setModalSection] = useState<number | null>(null);
+
+  // 🆕 FILTRO DE ESTADO
+  const [statusFilter, setStatusFilter] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
 
   const fetchMyShots = useCallback(async (pageNum: number) => {
     if (isFetchingRef.current || !userId) return;
@@ -55,7 +58,7 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
     try {
       const { data, error } = await supabase
         .from('shots')
-        .select(`id, title, description, image_url, author, likes_count, views_count, user_id, is_approved, profiles!shots_user_id_fkey ( username )`)
+        .select(`id, title, description, image_url, author, likes_count, views_count, user_id, is_approved, is_rejected, profiles!shots_user_id_fkey ( username )`)
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .range(start, end);
@@ -130,7 +133,15 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
 
   const isObraCellActive = selectedShots.length > 0;
 
-  // 🆕 CERRAR MENÚ AL HACER CLIC FUERA
+  // 🆕 FILTRADO DE SHOTS
+  const filteredShots = shots.filter(shot => {
+    if (statusFilter === 'all') return true;
+    if (statusFilter === 'approved') return shot.is_approved === true;
+    if (statusFilter === 'pending') return shot.is_approved === false && shot.is_rejected !== true;
+    if (statusFilter === 'rejected') return shot.is_rejected === true;
+    return true;
+  });
+
   useEffect(() => {
     if (!showCreateMenu) return;
     const handleClick = (e: MouseEvent) => {
@@ -144,13 +155,24 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showCreateMenu]);
 
+  useEffect(() => {
+    if (!showFilterMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      const menu = document.getElementById("my-shots-filter-menu");
+      const btn = document.getElementById("my-shots-filter-btn");
+      if (menu && !menu.contains(e.target as Node) && btn && !btn.contains(e.target as Node)) {
+        setShowFilterMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showFilterMenu]);
+
   return (
     <div className="fixed top-14 right-0 bottom-0 left-0 z-[50] bg-gray-950 flex flex-col">
       
-      {/* HEADER REORGANIZADO */}
       <div className="flex-shrink-0 flex items-center px-4 py-3 border-b border-yellow-500 bg-[#0a1833] gap-2">
         
-        {/* IZQUIERDA: Botón + Título + Compartir */}
         <button className="w-7 h-7 rounded-full bg-gray-700 hover:bg-gray-600 text-yellow-500 flex items-center justify-center flex-shrink-0 transition mr-2" onClick={onClose} aria-label="Regresar">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
         </button>
@@ -158,7 +180,6 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
           Mis Shots <span className="text-gray-500 mx-1">|</span> Mi Estudio
         </h2>
 
-        {/* 🆕 BOTONES DE COMPARTIR JUNTO AL TÍTULO */}
         <div className="flex items-center gap-2 ml-2 flex-shrink-0">
           <button onClick={() => setShowShareModal(true)} className="bg-blue-600 hover:bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center shadow transition" title="Compartir Estudio">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" /></svg>
@@ -168,7 +189,6 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
           </button>
         </div>
 
-        {/* CENTRO: Espaciador + Celda Obra */}
         <div className="flex-1" />
 
         {isObraCellActive && (
@@ -205,8 +225,56 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
 
         <div className="flex-1" />
 
-        {/* 🆕 DERECHA: Menú de Creación Rápido */}
-        <div className="relative flex-shrink-0 group">
+        {/* 🆕 BOTÓN DE FILTRO */}
+        <div className="relative flex-shrink-0">
+          <button 
+            id="my-shots-filter-btn"
+            className={`rounded-full w-7 h-7 flex items-center justify-center shadow transition ${
+              statusFilter === 'all' 
+                ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' 
+                : statusFilter === 'approved' 
+                  ? 'bg-green-600 text-white' 
+                  : statusFilter === 'pending' 
+                    ? 'bg-red-600 text-white' 
+                    : 'bg-purple-600 text-white'
+            }`}
+            onClick={() => setShowFilterMenu(prev => !prev)}
+            title="Filtrar por estado"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
+            </svg>
+          </button>
+          
+          {showFilterMenu && (
+            <div id="my-shots-filter-menu" className="absolute top-10 right-0 flex flex-col items-end gap-2 z-50">
+              <button
+                onClick={() => { setStatusFilter('approved'); setShowFilterMenu(false); }}
+                className={`rounded-full w-7 h-7 flex items-center justify-center shadow transition ${statusFilter === 'approved' ? 'ring-2 ring-white' : ''} bg-green-600 hover:bg-green-500 text-white`}
+                title="Aprobados"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+              </button>
+              <button
+                onClick={() => { setStatusFilter('pending'); setShowFilterMenu(false); }}
+                className={`rounded-full w-7 h-7 flex items-center justify-center shadow transition ${statusFilter === 'pending' ? 'ring-2 ring-white' : ''} bg-red-600 hover:bg-red-500 text-white`}
+                title="Pendientes"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </button>
+              <button
+                onClick={() => { setStatusFilter('rejected'); setShowFilterMenu(false); }}
+                className={`rounded-full w-7 h-7 flex items-center justify-center shadow transition ${statusFilter === 'rejected' ? 'ring-2 ring-white' : ''} bg-purple-600 hover:bg-purple-500 text-white`}
+                title="Rechazados"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728A9 9 0 010 12.728m0 0a9 9 0 00-12.728 0m12.728 0a9 9 0 010 12.728M5.636 5.636a9 9 0 0112.728 0" /></svg>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* BOTÓN CREAR */}
+        <div className="relative flex-shrink-0 group ml-2">
           <button 
             id="my-shots-create-btn"
             className="bg-yellow-500 hover:bg-yellow-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow transition" 
@@ -216,11 +284,11 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
             +
           </button>
           
-                    {showCreateMenu && (
+          {showCreateMenu && (
             <div id="my-shots-create-menu" className="absolute top-10 right-0 flex flex-col items-end gap-2 z-50">
               <button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow" aria-label="Subir archivo" onClick={() => { setModalSection(1); setShowCreateMenu(false); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 10l-4-4m0 0l-4 4m4-4v12" /></svg></button>
-              <button className="bg-green-500 hover:bg-green-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow" aria-label="Subir carpeta" onClick={() => { setModalSection(2); setShowCreateMenu(false); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7a2 2 0 012-2h3l2 2h7a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /></svg></button>
-              <button className="bg-purple-500 hover:bg-purple-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow" aria-label="Subir por URL" onClick={() => { setModalSection(3); setShowCreateMenu(false); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19v-6m0 0l-2 2m2-2l2 2m-2-2V5m8 14a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h3l2 2h7a2 2 0 012 2v7z" /></svg></button>
+              <button className="bg-green-500 hover:bg-green-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow" aria-label="Subir carpote" onClick={() => { setModalSection(2); setShowCreateMenu(false); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7a2 2 0 012-2h3l2 2h7a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /></svg></button>
+              <button className="bg-purple-500 hover:bg-purple-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow" aria-label="Subir por URL" onClick={() => { setModalSection(3); setShowCreateMenu(false); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19v-6m0 0l-2 2m2-2l2 2m-2-2V5m8 14a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h3l2 2h7a2 2 0 012 2v7a2 2 0 01-2 2z" /></svg></button>
               <button className="bg-pink-500 hover:bg-pink-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow" aria-label="Subir por cámara" onClick={() => { setModalSection(4); setShowCreateMenu(false); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h2l2-3h10l2 3h2a2 2 0 012 2v10a2 2 0 01-2 2H3a2 2 0 01-2-2V9a2 2 0 012-2zm9 4a3 3 0 100 6 3 3 0 000-6z" /></svg></button>
             </div>
           )}
@@ -231,33 +299,52 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
         {shots.length === 0 && loading && <div className="text-center py-8 text-gray-400 text-xs animate-pulse">Cargando tu estudio...</div>}
         {shots.length === 0 && !loading && <div className="text-center py-8 text-gray-600 text-xs">Tu estudio está vacío.</div>}
         
-        {shots.length > 0 && (
+        {filteredShots.length === 0 && shots.length > 0 && (
+          <div className="text-center py-8 text-gray-600 text-xs">
+            No hay shots con el filtro seleccionado.
+          </div>
+        )}
+        
+        {filteredShots.length > 0 && (
           <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-6 gap-2 w-full">
-            {shots.map(shot => (
-              <div key={shot.id} className="relative group mb-2">
-                <ShotCard 
-                  key={shot.id} 
-                  shot={shot} 
-                  isSaved={savedShots.includes(String(shot.id))} 
-                  isSaving={savingId === shot.id} 
-                  onSave={() => handleSave(shot.id)} 
-                  isLiked={likedShots.includes(String(shot.id))} 
-                  likesCount={shot.likes_count || 0} 
-                  isLiking={likingId === shot.id} 
-                  onLike={() => handleLike(shot.id)} 
-                  viewsCount={0} 
-                  user={user} 
-                  onClick={() => isObraCellActive ? setSelectedShots(prev => prev.includes(shot.id) ? prev.filter(id => id !== shot.id) : [...prev, shot.id]) : setSelectedShot(shot)} 
-                  hideViews={true} 
-                />
-                <input 
-                  type="checkbox" 
-                  checked={selectedShots.includes(shot.id)} 
-                  onChange={(e) => { e.stopPropagation(); setSelectedShots(prev => e.target.checked ? [...prev, shot.id] : prev.filter(id => id !== shot.id)); }}
-                  className="absolute top-2 left-2 z-10 w-5 h-5 accent-yellow-500 bg-gray-800 border-gray-600 rounded cursor-pointer"
-                />
-              </div>
-            ))}
+            {filteredShots.map(shot => {
+              // 🆕 LÓGICA DE COLORES
+              let statusBorder = "border border-gray-700/30";
+              if (shot.is_approved === true) {
+                statusBorder = "border-2 border-green-500/60";
+              } else if (shot.is_rejected === true) {
+                statusBorder = "border-2 border-purple-500/60"; // 🆕 PÚRPURA
+              } else {
+                statusBorder = "border-2 border-red-500/60"; // Rojo = pendiente
+              }
+              
+              return (
+                <div key={shot.id} className="relative group mb-2">
+                  <ShotCard 
+                    key={shot.id} 
+                    shot={shot} 
+                    isSaved={savedShots.includes(String(shot.id))} 
+                    isSaving={savingId === shot.id} 
+                    onSave={() => handleSave(shot.id)} 
+                    isLiked={likedShots.includes(String(shot.id))} 
+                    likesCount={shot.likes_count || 0} 
+                    isLiking={likingId === shot.id} 
+                    onLike={() => handleLike(shot.id)} 
+                    viewsCount={0} 
+                    user={user} 
+                    onClick={() => isObraCellActive ? setSelectedShots(prev => prev.includes(shot.id) ? prev.filter(id => id !== shot.id) : [...prev, shot.id]) : setSelectedShot(shot)} 
+                    hideViews={true}
+                    className={statusBorder}
+                  />
+                  <input 
+                    type="checkbox" 
+                    checked={selectedShots.includes(shot.id)} 
+                    onChange={(e) => { e.stopPropagation(); setSelectedShots(prev => e.target.checked ? [...prev, shot.id] : prev.filter(id => id !== shot.id)); }}
+                    className="absolute top-2 left-2 z-10 w-5 h-5 accent-yellow-500 bg-gray-800 border-gray-600 rounded cursor-pointer"
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
         {loading && shots.length > 0 && <div className="text-center py-4 text-gray-500 text-xs animate-pulse">Cargando más...</div>}
@@ -289,7 +376,6 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
 
       {showShareModal && <ShareStudioModal open={showShareModal} onClose={() => setShowShareModal(false)} />}
 
-      {/* 🆕 MODAL DE CREACIÓN INTEGRADO */}
       <ModalCreateShot open={modalSection !== null} section={modalSection} onClose={() => setModalSection(null)} />
     </div>
   );
