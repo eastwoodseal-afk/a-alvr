@@ -79,7 +79,7 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
         setAllSavedShots(processedSaved);
       }
 
-      const { data: boardData } = await supabase.from('board_shots').select('board_id, shot_id');
+      const { data: boardData } = await supabase.from('board_shots').select('board_id, shot_id').eq('user_id', userId);
       if (boardData) {
         const allShotIds = boardData.map((bs: any) => String(bs.shot_id));
         setShotsInBoards(allShotIds);
@@ -123,13 +123,13 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
   useEffect(() => {
     if (viewMode && viewMode !== 'all' && viewMode !== 'obra') {
       setLoadingBoard(true);
-      supabase.from('board_shots').select('shot_id, shots(id, image_url, title, description, author, likes_count, views_count, user_id, is_approved, profiles!shots_user_id_fkey(username), shot_tags(tags(id, name, slug, facet)))').eq('board_id', viewMode).order('created_at', { ascending: false })
+      supabase.from('board_shots').select('shot_id, shots(id, image_url, title, description, author, likes_count, views_count, user_id, is_approved, profiles!shots_user_id_fkey(username), shot_tags(tags(id, name, slug, facet)))').eq('board_id', viewMode).eq('user_id', userId).order('created_at', { ascending: false })
       .then(({ data }) => {
         if (data) { const processed = data.filter((bs: any) => bs.shots !== null).map((bs: any) => ({ ...bs.shots, id: String(bs.shots.id), username: bs.shots.profiles?.username || "Anónimo", tags: bs.shots.shot_tags?.map((st: any) => st.tags).filter(Boolean) || [] })); setBoardShots(processed); }
         setLoadingBoard(false);
       });
     }
-  }, [viewMode]);
+  }, [viewMode, userId]);
 
   const handleNavigate = (mode: string | null, obraSlug: string | null = null) => {
     setViewMode(mode);
@@ -151,21 +151,27 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
       return;
     }
     setDepositing(true);
-    const inserts = selectedShots.map(shot_id => ({ board_id: boardId, shot_id }));
+    const inserts = selectedShots.map(shot_id => ({ 
+      board_id: boardId, 
+      shot_id: shot_id,
+      user_id: userId
+    }));
     const { error } = await supabase.from('board_shots').insert(inserts);
     if (!error) {
       setShotsInBoards(prev => [...prev, ...selectedShots]);
       setSelectedShots([]);
       setBoards(prev => prev.map(b => b.id === boardId ? { ...b, shot_count: (b.shot_count || 0) + inserts.length } : b));
-    } else if (error.code === '23505') alert("Algunos shots ya estaban aquí.");
+    } else if (error.code === '23505') {
+      alert("Algunos shots ya estaban aquí.");
+    }
     setDepositing(false);
   };
 
   const handleDeleteBoard = async (boardId: string) => {
-    await supabase.from('board_shots').delete().eq('board_id', boardId);
+    await supabase.from('board_shots').delete().eq('board_id', boardId).eq('user_id', userId);
     await supabase.from('boards').delete().eq('id', boardId);
     setBoards(prev => prev.filter(b => b.id !== boardId));
-    const { data: boardData } = await supabase.from('board_shots').select('board_id, shot_id');
+    const { data: boardData } = await supabase.from('board_shots').select('board_id, shot_id').eq('user_id', userId);
     if (boardData) {
       const counts: Record<string, number> = {}; const allShotIds: string[] = [];
       boardData.forEach((bs: any) => { allShotIds.push(String(bs.shot_id)); counts[bs.board_id] = (counts[bs.board_id] || 0) + 1; });
@@ -224,7 +230,6 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
   let viewTitle = 'Shots Guardados';
   
   if (viewMode === 'all') { 
-    // AllSavedShotsView maneja esta vista
   } else if (viewMode === 'obra') {
     shotsToRender = allSavedShots.filter(s => s.tags?.some(t => t.facet === 'obra' && t.slug === obraFilter));
     viewTitle = Object.values(obrasByCategory).flat().find(o => o.slug === obraFilter)?.name || 'Obra Guardada';
@@ -333,7 +338,7 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
                   
                   {viewMode === null && (<input type="checkbox" checked={selectedShots.includes(shot.id)} onChange={(e) => setSelectedShots(prev => e.target.checked ? [...prev, shot.id] : prev.filter(id => id !== shot.id))} className="absolute top-2 left-2 z-10 w-5 h-5 accent-yellow-500 bg-gray-800 border-gray-600 rounded cursor-pointer" />)}
                   
-                  {viewMode !== null && viewMode !== 'obra' && (<button onClick={async () => { await supabase.from('board_shots').delete().match({ board_id: viewMode, shot_id: shot.id }); setBoardShots(prev => prev.filter(s => s.id !== shot.id)); setShotsInBoards(prev => prev.filter(id => id !== shot.id)); setBoards(prev => prev.map(b => b.id === viewMode ? { ...b, shot_count: Math.max(0, (b.shot_count || 1) - 1) } : b)); }} className="absolute top-2 left-2 z-10 bg-red-600/80 hover:bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity shadow">&times;</button>)}
+                  {viewMode !== null && viewMode !== 'obra' && (<button onClick={async () => { await supabase.from('board_shots').delete().match({ board_id: viewMode, shot_id: shot.id, user_id: userId }); setBoardShots(prev => prev.filter(s => s.id !== shot.id)); setShotsInBoards(prev => prev.filter(id => id !== shot.id)); setBoards(prev => prev.map(b => b.id === viewMode ? { ...b, shot_count: Math.max(0, (b.shot_count || 1) - 1) } : b)); }} className="absolute top-2 left-2 z-10 bg-red-600/80 hover:bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity shadow">&times;</button>)}
                 </div>
               ))}
             </div>
