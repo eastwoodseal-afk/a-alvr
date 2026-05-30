@@ -4,17 +4,7 @@ import ModalCreateShot from "./ModalCreateShot";
 import { useAuth } from "../lib/AuthContext";
 import { hasPermission } from "../lib/roleUtils";
 import { supabase } from "../lib/supabaseClient";
-
-const FACET_LABELS: Record<string, string> = {
-  author: "👤 Arquitecto / Estudio",
-  collection: "📁 Colecciones",
-  typology: "🏛️ Tipología",
-  materiality: "🧱 Materialidad",
-  geography: "🌎 Geografía",
-  concept: "💡 Concepto",
-  free: "🏷️ Libre",
-  obra: "🏗️ Obra / Proyecto", // 🛠️ CURA: Sintaxis corregida
-};
+import { DEFAULT_FACETS, FACET_SLUGS } from "../lib/facetConstants"; // 🆕 IMPORT
 
 interface TagItem {
   id: number;
@@ -183,16 +173,22 @@ export default function Footer({ skinUrl }: { skinUrl: string | null }) {
                   {loadingTags ? (
                     <div className="text-center py-3 text-gray-500 text-xs animate-pulse">Cargando...</div>
                   ) : (
-                    Object.entries(groupedTags).map(([facet, facetTags]) => (
-                      <div key={facet} className="p-1.5">
-                        <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">{FACET_LABELS[facet] || facet}</div>
-                        <div className="space-y-0.5">
-                          {facetTags.map(tag => (
-                            <button key={tag.id} onClick={() => handleTagSelect(tag.id.toString(), tag.name)} className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition ${selectedTag === tag.id.toString() ? 'bg-yellow-500 text-black' : 'text-gray-300 hover:bg-gray-800'}`}>{tag.name}</button>
-                          ))}
+                    Object.entries(groupedTags).map(([facet, facetTags]) => {
+                      // 🛠️ CAMBIO: Buscar configuración visual desde constantes
+                      const facetConfig = DEFAULT_FACETS.find(f => f.name === facet);
+                      const displayLabel = facetConfig ? `${facetConfig.icon} ${facetConfig.label}` : facet;
+
+                      return (
+                        <div key={facet} className="p-1.5">
+                          <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">{displayLabel}</div>
+                          <div className="space-y-0.5">
+                            {facetTags.map(tag => (
+                              <button key={tag.id} onClick={() => handleTagSelect(tag.id.toString(), tag.name)} className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition ${selectedTag === tag.id.toString() ? 'bg-yellow-500 text-black' : 'text-gray-300 hover:bg-gray-800'}`}>{tag.name}</button>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -225,7 +221,7 @@ export default function Footer({ skinUrl }: { skinUrl: string | null }) {
             <div id="footer-menu-dropdown" className="absolute bottom-10 right-6 flex flex-col items-end gap-2 z-50">
               <button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow" aria-label="Subir archivo" onClick={() => { setModalSection(1); setShowMenu(false); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 10l-4-4m0 0l-4 4m4-4v12" /></svg></button>
               <button className="bg-green-500 hover:bg-green-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow" aria-label="Subir carpeta" onClick={() => { setModalSection(2); setShowMenu(false); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7a2 2 0 012-2h3l2 2h7a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /></svg></button>
-              <button className="bg-purple-500 hover:bg-purple-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow" aria-label="Subir por URL" onClick={() => { setModalSection(3); setShowMenu(false); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19v-6m0 0l-2 2m2-2l2 2m-2-2V5m8 14a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h3l2 2h7a2 2 0 012 2v7z" /></svg></button>
+              <button className="bg-purple-500 hover:bg-purple-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow" aria-label="Subir por URL" onClick={() => { setModalSection(3); setShowMenu(false); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19v-6m0 0l-2 2m2-2l2 2m-2-2V5m8 14a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h3l2 2h7a2 2 0 012 2v7a2 2 0 01-2 2z" /></svg></button>
               <button className="bg-pink-500 hover:bg-pink-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow" aria-label="Subir por cámara" onClick={() => { setModalSection(4); setShowMenu(false); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h2l2-3h10l2 3h2a2 2 0 012 2v10a2 2 0 01-2 2H3a2 2 0 01-2-2V9a2 2 0 012-2zm9 4a3 3 0 100 6 3 3 0 000-6z" /></svg></button>
             </div>
           )}

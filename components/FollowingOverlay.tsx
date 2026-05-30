@@ -13,6 +13,7 @@ interface UserRelation {
   username: string;
   avatar_url?: string;
   hasSharedStudio: boolean;
+  isFollowing: boolean; 
 }
 
 const BATCH_SIZE = 20;
@@ -47,24 +48,51 @@ export default function FollowingOverlay({ userId, onClose }: Props) {
     const fetchUsers = async () => {
       setLoadingUsers(true);
       try {
-        const [followsRes, sharesRes] = await Promise.all([
-          supabase.from('follows').select('profiles!follows_following_id_fkey(id, username, avatar_url)').eq('follower_id', userId),
-          supabase.from('studio_shares').select('owner_id, profiles!studio_shares_owner_id_fkey(id, username, avatar_url)').eq('viewer_id', userId)
-        ]);
+        const { data: followsData } = await supabase
+          .from('follows')
+          .select('profiles!follows_following_id_fkey(id, username, avatar_url)')
+          .eq('follower_id', userId);
 
-        const followingUsers = (followsRes.data || []).map((f: any) => f.profiles ? { id: f.profiles.id, username: f.profiles.username, avatar_url: f.profiles.avatar_url, hasSharedStudio: false } : null).filter(Boolean) as UserRelation[];
-        const studioUsers = (sharesRes.data || []).map((s: any) => s.profiles ? { id: s.profiles.id, username: s.profiles.username, avatar_url: s.profiles.avatar_url, hasSharedStudio: true } : null).filter(Boolean) as UserRelation[];
+        const { data: sharesData } = await supabase
+          .from('studio_shares')
+          .select('owner_id, profiles!studio_shares_owner_id_fkey(id, username, avatar_url)')
+          .eq('viewer_id', userId);
 
         const userMap = new Map<string, UserRelation>();
-        followingUsers.forEach(u => userMap.set(u.id, u));
-        studioUsers.forEach(u => {
-          if (userMap.has(u.id)) userMap.get(u.id)!.hasSharedStudio = true;
-          else userMap.set(u.id, u);
+
+        (followsData || []).forEach((f: any) => {
+          if (f.profiles) {
+            userMap.set(f.profiles.id, {
+              id: f.profiles.id,
+              username: f.profiles.username,
+              avatar_url: f.profiles.avatar_url,
+              isFollowing: true,
+              hasSharedStudio: false
+            });
+          }
+        });
+
+        (sharesData || []).forEach((s: any) => {
+          if (s.profiles) {
+            if (userMap.has(s.profiles.id)) {
+              userMap.get(s.profiles.id)!.hasSharedStudio = true;
+            } else {
+              userMap.set(s.profiles.id, {
+                id: s.profiles.id,
+                username: s.profiles.username,
+                avatar_url: s.profiles.avatar_url,
+                isFollowing: false,
+                hasSharedStudio: true
+              });
+            }
+          }
         });
 
         const finalUsers = Array.from(userMap.values());
         setRelatedUsers(finalUsers);
-        setFollowingIds(finalUsers.map(u => u.id));
+
+        const idsForFeed = finalUsers.filter(u => u.isFollowing).map(u => u.id);
+        setFollowingIds(idsForFeed);
 
         if (currentUser?.id) {
           const [savedRes, likedRes] = await Promise.all([
@@ -82,12 +110,20 @@ export default function FollowingOverlay({ userId, onClose }: Props) {
 
   const fetchShots = useCallback(async (pageNum: number) => {
     if (isFetchingRef.current || followingIds.length === 0) return;
+    
     isFetchingRef.current = true;
     setLoadingShots(true);
     const start = pageNum * BATCH_SIZE;
     const end = start + BATCH_SIZE - 1;
+    
     try {
-      const { data, error } = await supabase.from('shots').select('id, image_url, title, description, user_id, author, likes_count, views_count, profiles!shots_user_id_fkey(username)').in('user_id', followingIds).eq('is_approved', true).order('created_at', { ascending: false }).range(start, end);
+      const { data, error } = await supabase.from('shots')
+        .select('id, image_url, title, description, user_id, author, likes_count, views_count, profiles!shots_user_id_fkey(username)')
+        .in('user_id', followingIds)
+        .eq('is_approved', true)
+        .order('created_at', { ascending: false })
+        .range(start, end);
+        
       if (!error && data) {
         const processed = data.map((s: any) => ({ ...s, id: s.id.toString(), username: s.profiles?.username || "Anónimo" }));
         if (pageNum === 0) setShots(processed);
@@ -103,7 +139,14 @@ export default function FollowingOverlay({ userId, onClose }: Props) {
     else { setShots([]); setLoadingShots(false); }
   }, [followingIds]);
 
-  const loadMore = useCallback(() => { if (hasMore && !isFetchingRef.current) { const nextPage = page + 1; setPage(nextPage); fetchShots(nextPage); } }, [page, hasMore, fetchShots]);
+  const loadMore = useCallback(() => { 
+    if (hasMore && !isFetchingRef.current && followingIds.length > 0) { 
+      const nextPage = page + 1; 
+      setPage(nextPage); 
+      fetchShots(nextPage); 
+    } 
+  }, [page, hasMore, fetchShots, followingIds]);
+  
   const sentinelRef = useInfiniteScroll(loadMore, loadingShots);
 
   const handleSave = async (shotId: string) => { if (!currentUser) return; await supabase.from("saved_shots").insert({ user_id: currentUser.id, shot_id: shotId }); setSavedShots(prev => [...prev, shotId]); };
@@ -111,7 +154,7 @@ export default function FollowingOverlay({ userId, onClose }: Props) {
   const handleView = useCallback(async (shotId: string) => { await supabase.rpc('increment_view', { shot_id: parseInt(shotId) }); setShots(prev => prev.map(s => s.id === shotId ? { ...s, views_count: (s.views_count || 0) + 1 } : s)); }, []);
 
   return (
-    <div className="fixed top-14 left-0 right-0 bottom-0 z-[50] bg-gray-950 flex flex-col overflow-hidden"> {/* 🆕 Z-50 */}
+    <div className="fixed top-14 left-0 right-0 bottom-0 z-[50] bg-gray-950 flex flex-col overflow-hidden">
         
       <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-800 bg-gray-900/50 flex-shrink-0">
         <button onClick={onClose} className="w-7 h-7 rounded-full bg-gray-700 hover:bg-gray-600 text-yellow-500 flex items-center justify-center flex-shrink-0 transition">
@@ -126,39 +169,74 @@ export default function FollowingOverlay({ userId, onClose }: Props) {
 
       <div className="flex flex-1 overflow-hidden relative">
         {drawerOpen && (<div className="md:hidden fixed inset-0 bg-black/50 z-10" onClick={() => setDrawerOpen(false)} />)}
+        
+        {/* SIDEBAR IZQUIERDO */}
         <aside className={`fixed md:static top-14 left-0 bottom-0 w-48 bg-gray-900/95 backdrop-blur-sm border-r border-gray-800 flex-shrink-0 flex flex-col overflow-y-auto custom-scrollbar z-20 transition-transform duration-300 ${drawerOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
           <div className="px-2 py-3 border-b border-gray-800 hidden md:block"><h3 className="text-[10px] font-bold text-yellow-500 uppercase tracking-wider text-center">RELACIONES</h3></div>
           <div className="space-y-1 px-2 py-2">
             {loadingUsers ? <div className="text-center text-gray-500 p-4 text-xs">Cargando...</div> :
              relatedUsers.length === 0 ? <div className="text-center text-gray-600 text-xs p-4">Vacío</div> :
              relatedUsers.map((u) => (
-              <div key={u.id} className="w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-800 transition">
-                <button onClick={() => { setSelectedCollectionId(u.id); setDrawerOpen(false); }} className="flex items-center gap-2 hover:opacity-80 transition min-w-0 flex-1" title="Ver Colección">
-                  <div className="w-7 h-7 rounded-full bg-gray-700 overflow-hidden flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white border border-gray-600">
-                    {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover" referrerPolicy="no-referrer"/> : (u.username || "?").charAt(0).toUpperCase()}
-                  </div>
-                  <span className="text-[11px] text-gray-300 truncate">@{u.username}</span>
-                </button>
-                {u.hasSharedStudio && (
-                  <button onClick={() => { setSelectedStudioId(u.id); setDrawerOpen(false); }} className="bg-blue-600 rounded-full w-[24px] h-[24px] flex items-center justify-center shadow hover:bg-blue-500 transition flex-shrink-0" title="Ver Estudio">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5 text-white"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" /></svg>
-                  </button>
-                )}
-              </div>
-            ))
+               
+               <div key={u.id} className="w-full flex items-center justify-between gap-1">
+                 
+                 {/* COLUMNA IZQUIERDA: INFO USUARIO */}
+                 <div className="flex-1 min-w-0">
+                   {u.isFollowing ? (
+                     // CASO A: Es seguido -> Link con Borde Amarillo
+                     <button 
+                       onClick={() => { setSelectedCollectionId(u.id); setDrawerOpen(false); }} 
+                       className="w-full flex items-center gap-2 p-1.5 rounded-lg border border-yellow-500/50 bg-yellow-500/5 hover:bg-yellow-500/10 transition cursor-pointer group"
+                       title="Ver Colección Pública"
+                     >
+                       <div className="w-6 h-6 rounded-full bg-gray-700 overflow-hidden flex-shrink-0 flex items-center justify-center text-[9px] font-bold text-white border border-gray-600 group-hover:border-yellow-400 transition">
+                         {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover" referrerPolicy="no-referrer"/> : (u.username || "?").charAt(0).toUpperCase()}
+                       </div>
+                       <span className="text-[11px] text-yellow-400 font-medium truncate group-hover:text-white transition">@{u.username}</span>
+                     </button>
+                   ) : (
+                     // CASO B: Solo Studio Share -> Texto informativo (Sin borde)
+                     <div className="w-full flex items-center gap-2 p-1.5 rounded-lg cursor-default">
+                       <div className="w-6 h-6 rounded-full bg-gray-700 overflow-hidden flex-shrink-0 flex items-center justify-center text-[9px] font-bold text-gray-500 border border-gray-700">
+                         {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover opacity-70" referrerPolicy="no-referrer"/> : (u.username || "?").charAt(0).toUpperCase()}
+                       </div>
+                       <span className="text-[11px] text-gray-600 truncate italic">@{u.username}</span>
+                     </div>
+                   )}
+                 </div>
+
+                 {/* COLUMNA DERECHA: BOTÓN ESTUDIO */}
+                 {u.hasSharedStudio && (
+                   <button 
+                     onClick={() => { setSelectedStudioId(u.id); setDrawerOpen(false); }} 
+                     className="bg-blue-600 rounded-full w-[24px] h-[24px] flex items-center justify-center shadow hover:bg-blue-500 transition flex-shrink-0" 
+                     title="Ver Estudio Compartido"
+                   >
+                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5 text-white"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" /></svg>
+                   </button>
+                 )}
+               </div>
+             ))
             }
           </div>
         </aside>
 
+        {/* ÁREA DE SHOTS */}
         <div className="flex-1 min-w-0 h-full overflow-y-auto relative p-2 custom-scrollbar">
-          {loadingShots && shots.length === 0 ? <div className="text-center py-8 text-gray-400">Cargando...</div> : 
-           shots.length === 0 ? <div className="text-center py-8 text-gray-500">Sin shots aprobados.</div> :
-           <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-6 gap-2 w-full">
+          {followingIds.length === 0 && !loadingUsers ? (
+            <div className="text-center py-8 text-gray-600">
+              Sigue a otros usuarios para ver sus shots aquí.<br/>
+              <span className="text-xs text-gray-700">(Los estudios compartidos no llenan este muro)</span>
+            </div>
+          ) : loadingShots && shots.length === 0 ? (
+            <div className="text-center py-8 text-gray-400">Cargando...</div>
+          ) : (
+            <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-6 gap-2 w-full">
               {shots.map(shot => (
                 <ShotCard key={shot.id} shot={shot} isSaved={savedShots.includes(shot.id)} isSaving={false} onSave={() => handleSave(shot.id)} isLiked={likedShots.includes(shot.id)} likesCount={shot.likes_count || 0} isLiking={false} onLike={() => handleLike(shot.id)} viewsCount={shot.views_count || 0} user={currentUser} onClick={() => setSelectedShot(shot)} />
               ))}
-           </div>
-          }
+            </div>
+          )}
           {loadingShots && shots.length > 0 && <div className="text-center py-4 text-gray-500">Cargando más...</div>}
           <div ref={sentinelRef} className="h-1 w-full"></div>
         </div>
@@ -167,7 +245,6 @@ export default function FollowingOverlay({ userId, onClose }: Props) {
       {selectedCollectionId && (<PublicCollectionOverlay userId={selectedCollectionId} onClose={() => setSelectedCollectionId(null)} />)}
       {selectedStudioId && (<UserProfileOverlay userId={selectedStudioId} onClose={() => setSelectedStudioId(null)} studioMode={true} />)}
       
-      {/* 🆕 MODAL DETALLE CORREGIDO */}
       {selectedShot && currentUser && ( 
         <ShotDetailModal 
           shot={selectedShot} 

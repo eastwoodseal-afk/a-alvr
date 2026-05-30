@@ -9,7 +9,6 @@ interface Shot {
   likes_count?: number; 
   views_count?: number; 
   is_approved?: boolean; 
-  is_rejected?: boolean;
 }
 
 interface Props {
@@ -33,16 +32,13 @@ interface Props {
   className?: string;
 }
 
-export default function ShotCard({ shot, isSaved, isSaving, onSave, isLiked, likesCount, isLiking, onLike, viewsCount, user, onClick, hideViews, hideSave, boardName, isAdmin, onDisapprove, isDisapproving, className }: Props) {
-
-  let statusBorder = "border border-gray-700/30"; 
-  if (shot.is_approved === true) statusBorder = "border-2 border-green-500/60"; 
-  else if (shot.is_rejected === true) statusBorder = "border-2 border-purple-500/60"; 
-  else statusBorder = "border-2 border-red-500/60"; 
+export default function ShotCard({ 
+  shot, isSaved, isSaving, onSave, isLiked, likesCount, isLiking, onLike, viewsCount, user, onClick, hideViews, hideSave, boardName, isAdmin, onDisapprove, isDisapproving, className 
+}: Props) {
 
   return (
     <div 
-      className={`mb-2 break-inside-avoid rounded-lg overflow-hidden bg-gray-800 cursor-pointer hover:ring-2 hover:ring-yellow-500 transition relative group ${statusBorder} ${className || ''}`}
+      className={`mb-2 break-inside-avoid rounded-lg overflow-hidden bg-gray-800 cursor-pointer hover:ring-2 hover:ring-yellow-500 transition relative group border border-gray-700/30 ${className || ''}`}
       onClick={onClick}
     >
       <div className="relative w-full">

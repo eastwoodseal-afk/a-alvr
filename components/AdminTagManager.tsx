@@ -1,17 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabaseClient";
-
-const FACET_OPTIONS = [
-  { value: 'typology', label: '🏛️ Tipología' },
-  { value: 'materiality', label: '🧱 Materialidad' },
-  { value: 'geography', label: '🌎 Geografía' },
-  { value: 'concept', label: '💡 Concepto' },
-  { value: 'author', label: '👤 Arquitecto/Estudio' },
-  { value: 'collection', label: '📁 Colección/Tablero' },
-  { value: 'free', label: '🏷️ Libre' },
-  { value: 'obra', label: '🏗️ Obra / Proyecto' }, 
-];
+import { DEFAULT_FACETS } from "../lib/facetConstants"; // 🆕 IMPORT
 
 interface Tag { id: number; name: string; slug: string; facet: string; }
 
@@ -39,7 +29,6 @@ export default function AdminTagManager() {
 
   const resetForm = () => { setForm({ name: "", slug: "", facet: "free" }); setEditingId(null); };
 
-  // 🆕 SINCRONIZACIÓN: Autogenerar slug al cambiar el nombre
   const generateSlug = (name: string) => name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
   const handleNameChange = (name: string) => setForm(prev => ({ ...prev, name, slug: generateSlug(name) }));
 
@@ -50,7 +39,6 @@ export default function AdminTagManager() {
     const { error } = await supabase.from('tags').update({ name: form.name, slug: form.slug, facet: form.facet }).eq('id', editingId);
     
     if (error) {
-      // 🆕 ESCUDO: Capturar error de slug duplicado (Código 23505 de Postgres)
       if (error.code === '23505') {
         alert("Error: Ya existe una etiqueta con ese nombre o slug. Deben ser únicos.");
       } else {
@@ -76,7 +64,11 @@ export default function AdminTagManager() {
     setConfirmDeleteId(null);
   };
 
-  const getFacetLabel = (f: string) => FACET_OPTIONS.find(o => o.value === f)?.label || f;
+  // 🛠️ Helper para mostrar label
+  const getFacetLabel = (f: string) => {
+    const found = DEFAULT_FACETS.find(opt => opt.name === f);
+    return found ? `${found.icon} ${found.label}` : f;
+  };
 
   if (loading) return <div className="text-center py-8 text-gray-400 animate-pulse">Cargando etiquetas...</div>;
 
@@ -86,11 +78,10 @@ export default function AdminTagManager() {
       
       {editingId ? (
         <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 mb-8 bg-gray-800 p-4 rounded-lg border border-gray-600">
-          {/* 🆕 SINCRONIZACIÓN: Usar handleNameChange para el nombre */}
           <input type="text" placeholder="Nombre" className="flex-1 bg-gray-700 border border-gray-500 rounded-lg px-3 py-2 text-sm text-white" value={form.name} onChange={e => handleNameChange(e.target.value)} required disabled={saving} />
           <input type="text" placeholder="Slug (auto)" className="flex-1 bg-gray-700 border border-gray-500 rounded-lg px-3 py-2 text-sm text-white" value={form.slug} onChange={e => setForm(p => ({...p, slug: e.target.value}))} required disabled={saving} />
           <select className="bg-gray-700 border border-gray-500 rounded-lg px-3 py-2 text-sm text-white" value={form.facet} onChange={e => setForm(p => ({...p, facet: e.target.value}))} disabled={saving}>
-            {FACET_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {DEFAULT_FACETS.map(o => <option key={o.name} value={o.name}>{o.icon} {o.label}</option>)}
           </select>
           <div className="flex gap-2">
             <button type="submit" disabled={saving} className="px-4 bg-green-600 text-white font-bold rounded-lg text-sm disabled:opacity-50 hover:bg-green-500 transition">Guardar</button>

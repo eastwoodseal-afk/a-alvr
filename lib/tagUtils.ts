@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { FACET_SLUGS } from "./facetConstants"; // 🆕 IMPORT DE CONSTANTES
 
 export interface Tag {
   id?: number;
@@ -48,7 +49,9 @@ export const autoTagAuthor = async (authorName: string, shotId: string) => {
   if (slug.length < 2) return;
   const { data: isBlacklisted } = await supabase.from('blacklisted_tags').select('slug').eq('slug', slug).maybeSingle();
   if (isBlacklisted) return;
-  const tagId = await getOrCreateTag({ name: authorName.trim(), slug, facet: 'author' });
+  
+  // 🛠️ CAMBIO: Usando constante segura FACET_SLUGS.AUTHOR
+  const tagId = await getOrCreateTag({ name: authorName.trim(), slug, facet: FACET_SLUGS.AUTHOR });
   if (!tagId) return;
   const { error: linkError } = await supabase.from('shot_tags').insert({ shot_id: parseInt(shotId), tag_id: tagId });
   if (linkError && linkError.code !== '23505') console.error("Error vinculando autor:", linkError);
@@ -60,7 +63,9 @@ export const autoTagBoard = async (boardName: string) => {
   if (slug.length < 2) return;
   const { data: isBlacklisted } = await supabase.from('blacklisted_tags').select('slug').eq('slug', slug).maybeSingle();
   if (isBlacklisted) return;
-  await getOrCreateTag({ name: boardName.trim(), slug, facet: 'collection' });
+  
+  // 🛠️ CAMBIO: Usando constante segura FACET_SLUGS.COLLECTION
+  await getOrCreateTag({ name: boardName.trim(), slug, facet: FACET_SLUGS.COLLECTION });
 };
 
 // 🆕 VINCULACIÓN MASIVA A OBRA
@@ -71,7 +76,8 @@ export const batchLinkObra = async (shotIds: string[], obraName: string) => {
   const { data: isBlacklisted } = await supabase.from('blacklisted_tags').select('slug').eq('slug', slug).maybeSingle();
   if (isBlacklisted) return false;
 
-  const tagId = await getOrCreateTag({ name: obraName.trim(), slug, facet: 'obra' });
+  // 🛠️ CAMBIO: Usando constante segura FACET_SLUGS.OBRA
+  const tagId = await getOrCreateTag({ name: obraName.trim(), slug, facet: FACET_SLUGS.OBRA });
   if (!tagId) return false;
 
   const inserts = shotIds.map(shot_id => ({ shot_id: parseInt(shot_id), tag_id: tagId }));

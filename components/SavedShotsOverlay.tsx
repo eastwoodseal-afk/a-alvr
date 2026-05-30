@@ -10,6 +10,7 @@ import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
 import { autoTagBoard, batchLinkObra, Tag } from "../lib/tagUtils";
+import { FACET_SLUGS } from "../lib/facetConstants"; // 🆕 IMPORT SEGURO
 
 const BATCH_SIZE = 30;
 
@@ -105,14 +106,16 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
     if (selectedShots.length > 0 && viewMode === null) {
       const selectedData = unassignedShots.filter(s => selectedShots.includes(s.id));
       let foundObra = "";
-      for (const shot of selectedData) { const obraTag = shot.tags?.find((t: Tag) => t.facet === 'obra'); if (obraTag) { foundObra = obraTag.name; break; } }
+      // 🛠️ CAMBIO: Usar constante segura
+      for (const shot of selectedData) { const obraTag = shot.tags?.find((t: Tag) => t.facet === FACET_SLUGS.OBRA); if (obraTag) { foundObra = obraTag.name; break; } }
       setObraName(foundObra);
     } else { setObraName(""); }
   }, [selectedShots, viewMode]);
 
   const obrasByCategory = useMemo(() => {
     const obrasMap = new Map<string, { slug: string; name: string; thumbnail: string; category: string }>();
-    allSavedShots.forEach(shot => { shot.tags?.forEach(tag => { if (tag.facet === 'obra' && tag.slug) { if (!obrasMap.has(tag.slug)) { obrasMap.set(tag.slug, { slug: tag.slug, name: tag.name, thumbnail: shot.image_url, category: shot.category_name || 'Sin Categoría' }); } } }); });
+    // 🛠️ CAMBIO: Usar constante segura
+    allSavedShots.forEach(shot => { shot.tags?.forEach(tag => { if (tag.facet === FACET_SLUGS.OBRA && tag.slug) { if (!obrasMap.has(tag.slug)) { obrasMap.set(tag.slug, { slug: tag.slug, name: tag.name, thumbnail: shot.image_url, category: shot.category_name || 'Sin Categoría' }); } } }); });
     const grouped: Record<string, Array<{ slug: string; name: string; thumbnail: string }>> = {};
     obrasMap.forEach(obra => { const cat = obra.category; if (!grouped[cat]) grouped[cat] = []; grouped[cat].push(obra); });
     const sortedGrouped: Record<string, Array<{ slug: string; name: string; thumbnail: string }>> = {};
@@ -213,7 +216,7 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
     setLinkingObra(true);
     const success = await batchLinkObra(selectedShots, obraName.trim());
     if (success) {
-      const newTag: Tag = { name: obraName.trim(), slug: obraName.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, ''), facet: 'obra' };
+      const newTag: Tag = { name: obraName.trim(), slug: obraName.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, ''), facet: FACET_SLUGS.OBRA }; // 🛠️ Usar constante
       setAllSavedShots(prev => prev.map(s => { if (selectedShots.includes(s.id)) { const existingTags = s.tags || []; return { ...s, tags: [...existingTags, newTag] }; } return s; }));
       setSelectedShots([]); setObraName("");
     } else { alert("Error al vincular la obra."); }
@@ -231,7 +234,8 @@ export default function SavedShotsOverlay({ userId, onClose, initialView = null 
   
   if (viewMode === 'all') { 
   } else if (viewMode === 'obra') {
-    shotsToRender = allSavedShots.filter(s => s.tags?.some(t => t.facet === 'obra' && t.slug === obraFilter));
+    // 🛠️ CAMBIO: Usar constante segura
+    shotsToRender = allSavedShots.filter(s => s.tags?.some(t => t.facet === FACET_SLUGS.OBRA && t.slug === obraFilter));
     viewTitle = Object.values(obrasByCategory).flat().find(o => o.slug === obraFilter)?.name || 'Obra Guardada';
   } else if (viewMode === null) {
     shotsToRender = unassignedShots;

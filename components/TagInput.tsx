@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { DEFAULT_FACETS, FACET_SLUGS } from "../lib/facetConstants"; // 🆕 IMPORT
 
 export interface Tag {
   id?: number;
@@ -14,18 +15,6 @@ interface Props {
   onChange: (tags: Tag[]) => void;
 }
 
-// 🛠️ EXPANDIDO: Añadidas facetas de Obra, Autor y Colección para creación Admin
-const FACET_LABELS: Record<string, string> = {
-  typology: "🏛️ Tipología",
-  materiality: "🧱 Materialidad",
-  geography: "🌎 Geografía",
-  concept: "💡 Concepto",
-  author: "👤 Arquitecto/Estudio",
-  collection: "📁 Colección/Tablero",
-  obra: "🏗️ Obra / Proyecto",
-  free: "🏷️ Libre",
-};
-
 export default function TagInput({ selectedTags, onChange }: Props) {
   const [search, setSearch] = useState("");
   const [suggestions, setSuggestions] = useState<Tag[]>([]);
@@ -35,8 +24,7 @@ export default function TagInput({ selectedTags, onChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // 🆕 Estado para la faceta al crear un nuevo tag
-  const [createFacet, setCreateFacet] = useState<string>('free');
+  const [createFacet, setCreateFacet] = useState<string>(FACET_SLUGS.FREE); // 🛠️ Usar constante
 
   useEffect(() => {
     fetchTags();
@@ -85,7 +73,6 @@ export default function TagInput({ selectedTags, onChange }: Props) {
     onChange(selectedTags.filter(t => t.slug !== slug));
   };
 
-  // 🛠️ ACTUALIZADO: Crear tag con la faceta seleccionada
   const handleCreateTag = () => {
     if (!search.trim()) return;
     const slug = search.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
@@ -94,7 +81,7 @@ export default function TagInput({ selectedTags, onChange }: Props) {
     const newTag: Tag = {
       name: search.trim(),
       slug: slug,
-      facet: createFacet // Usa la faceta seleccionada
+      facet: createFacet
     };
     
     const existing = allTags.find(t => t.slug === slug);
@@ -104,7 +91,7 @@ export default function TagInput({ selectedTags, onChange }: Props) {
       onChange([...selectedTags, newTag]);
       setSearch("");
       setShowDropdown(false);
-      setCreateFacet('free'); // Reset
+      setCreateFacet(FACET_SLUGS.FREE); // Reset
     }
   };
 
@@ -119,23 +106,35 @@ export default function TagInput({ selectedTags, onChange }: Props) {
     }
   };
 
+  // 🛠️ AGRUPAMIENTO DINÁMICO
   const groupedSuggestions = suggestions.reduce((acc, tag) => {
     if (!acc[tag.facet]) acc[tag.facet] = [];
     acc[tag.facet].push(tag);
     return acc;
   }, {} as Record<string, Tag[]>);
 
+  // Helper para obtener label e icono
+  const getFacetDisplay = (facetName: string) => {
+    const found = DEFAULT_FACETS.find(f => f.name === facetName);
+    return found ? `${found.icon} ${found.label}` : facetName;
+  };
+
   return (
     <div className="relative w-full">
       
       <div className="flex flex-wrap items-center gap-1.5 w-full min-h-[40px] bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 cursor-text" onClick={() => inputRef.current?.focus()}>
         
-        {selectedTags.map(tag => (
-          <span key={tag.slug} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${tag.facet === 'free' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-gray-700 text-gray-200 border border-gray-600'}`}>
-            {tag.name}
-            <button type="button" onClick={() => handleRemoveTag(tag.slug)} className="text-gray-400 hover:text-white ml-0.5">&times;</button>
-          </span>
-        ))}
+        {selectedTags.map(tag => {
+           const facetDisplay = DEFAULT_FACETS.find(f => f.name === tag.facet);
+           const isFree = tag.facet === FACET_SLUGS.FREE;
+           return (
+            <span key={tag.slug} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${isFree ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-gray-700 text-gray-200 border border-gray-600'}`}>
+              <span className="mr-1">{facetDisplay?.icon}</span>
+              {tag.name}
+              <button type="button" onClick={() => handleRemoveTag(tag.slug)} className="text-gray-400 hover:text-white ml-0.5">&times;</button>
+            </span>
+          );
+        })}
 
         <input
           ref={inputRef}
@@ -159,7 +158,7 @@ export default function TagInput({ selectedTags, onChange }: Props) {
               {Object.entries(groupedSuggestions).map(([facet, tags]) => (
                 <div key={facet}>
                   <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider sticky top-0 bg-gray-800 z-10">
-                    {FACET_LABELS[facet] || facet}
+                    {getFacetDisplay(facet)}
                   </div>
                   {tags.map(tag => (
                     <button
@@ -170,13 +169,13 @@ export default function TagInput({ selectedTags, onChange }: Props) {
                       className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 transition flex items-center justify-between"
                     >
                       <span>{tag.name}</span>
-                      <span className="text-[9px] text-gray-500 bg-gray-700 px-1.5 rounded">{FACET_LABELS[tag.facet]?.split(' ')[0] || tag.facet}</span>
+                      <span className="text-[9px] text-gray-500 bg-gray-700 px-1.5 rounded">{getFacetDisplay(tag.facet).split(' ')[0]}</span>
                     </button>
                   ))}
                 </div>
               ))}
 
-              {/* 🛠️ CREACIÓN DE TAGS CON SELECTOR DE FACETA */}
+              {/* CREACIÓN DE TAGS */}
               {search.trim() && !allTags.find(t => t.name.toLowerCase() === search.trim().toLowerCase()) && (
                 <div className="border-t border-gray-600 p-2">
                   <div className="text-[10px] text-gray-400 mb-1.5 uppercase tracking-wider">Crear nueva etiqueta</div>
@@ -187,8 +186,8 @@ export default function TagInput({ selectedTags, onChange }: Props) {
                       onChange={(e) => setCreateFacet(e.target.value)}
                       className="bg-gray-600 border border-gray-500 rounded px-2 py-1 text-[10px] text-white focus:outline-none focus:ring-1 focus:ring-yellow-500 flex-shrink-0"
                     >
-                      {Object.entries(FACET_LABELS).map(([key, label]) => (
-                        <option key={key} value={key}>{label}</option>
+                      {DEFAULT_FACETS.map(f => (
+                        <option key={f.name} value={f.name}>{f.icon} {f.label}</option>
                       ))}
                     </select>
                   </div>
@@ -199,7 +198,7 @@ export default function TagInput({ selectedTags, onChange }: Props) {
                     className="w-full text-left px-3 py-2 text-sm text-green-400 hover:bg-green-900/20 transition flex items-center gap-2 rounded"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                    Añadir como <span className="font-bold">{FACET_LABELS[createFacet]}</span>
+                    Añadir como <span className="font-bold">{getFacetDisplay(createFacet)}</span>
                   </button>
                 </div>
               )}
