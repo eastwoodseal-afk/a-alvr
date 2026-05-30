@@ -1,12 +1,13 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { useFacets } from "../lib/FacetContext"; // 🆕 IMPORT
 
 interface Facet {
   id: number;
-  name: string; // Slug interno (ej: 'typology')
-  label: string; // Nombre visible (ej: 'Tipología')
-  icon: string; // Emoji
+  name: string;
+  label: string;
+  icon: string;
   sort_order: number;
 }
 
@@ -15,7 +16,6 @@ export default function AdminFacetManager() {
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   
-  // Form state
   const [name, setName] = useState("");
   const [label, setLabel] = useState("");
   const [icon, setIcon] = useState("");
@@ -23,6 +23,9 @@ export default function AdminFacetManager() {
   
   const [saving, setSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
+  // 🆕 OBTENER FUNCIÓN DE REFRESCO GLOBAL
+  const { refreshFacets } = useFacets();
 
   useEffect(() => {
     fetchFacets();
@@ -57,7 +60,6 @@ export default function AdminFacetManager() {
     
     setSaving(true);
     
-    // Generar slug automático si es nuevo y no se especificó
     const finalName = name.toLowerCase().replace(/\s+/g, '_').replace(/[^\w-]+/g, '');
 
     if (editingId) {
@@ -75,7 +77,8 @@ export default function AdminFacetManager() {
       if (error) alert("Error al crear: " + error.message);
     }
 
-    await fetchFacets();
+    await fetchFacets(); // Refresca lista local
+    refreshFacets(); // 🆕 AVISA A TODA LA APP
     resetForm();
     setSaving(false);
   };
@@ -83,9 +86,10 @@ export default function AdminFacetManager() {
   const handleDelete = async (id: number) => {
     const { error } = await supabase.from('facets').delete().eq('id', id);
     if (error) {
-      alert("Error: No se puede eliminar. Probablemente hay etiquetas usando esta faceta.");
+      alert("Error: No se puede eliminar. Probablemente hay etiquetas usando esta faceta (restricción FK).");
     } else {
       setFacets(prev => prev.filter(f => f.id !== id));
+      refreshFacets(); // 🆕 AVISA A TODA LA APP
     }
     setConfirmDeleteId(null);
   };
@@ -96,7 +100,6 @@ export default function AdminFacetManager() {
     <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
       <h3 className="text-lg font-bold text-yellow-400 mb-6">Taxonomía del Ateneo (Facetas)</h3>
       
-      {/* FORMULARIO */}
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-8 bg-gray-800 p-4 rounded-lg border border-gray-600">
         <input 
           type="text" 
@@ -104,12 +107,12 @@ export default function AdminFacetManager() {
           value={name} 
           onChange={e => setName(e.target.value)} 
           className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-yellow-500" 
-          disabled={saving || !!editingId} // No permitir cambiar el slug (name) al editar para no romper refs
+          disabled={saving || !!editingId} 
           required 
         />
         <input 
           type="text" 
-          placeholder="Título visible (ej: Tipología)" 
+          placeholder="Título visible" 
           value={label} 
           onChange={e => setLabel(e.target.value)} 
           className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-yellow-500" 
@@ -139,7 +142,6 @@ export default function AdminFacetManager() {
         </div>
       </form>
 
-      {/* LISTA */}
       <div className="space-y-2">
         {facets.length === 0 && <div className="text-gray-600 text-sm text-center italic">No hay facetas definidas.</div>}
         {facets.map(f => (

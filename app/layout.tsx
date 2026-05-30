@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "../lib/AuthContext";
+import { FacetProvider } from "../lib/FacetContext"; // 🆕 IMPORT
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import ModalUsername from "../components/ModalUsername";
@@ -29,29 +30,29 @@ export default async function RootLayout({
 
   return (
     <html lang="es">
-      {/* 🆕 min-h-screen y flex-col para que el main ocupe el espacio */}
       <body className="bg-gray-950 text-white flex flex-col min-h-screen">
         <AuthProvider>
+          <FacetProvider> {/* 🆕 ENVOLVEMOS LA APP */}
+            
+            {/* CAPA 0: EL VITRAL */}
+            {skinUrl && (
+              <div 
+                className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
+                style={{ backgroundImage: `url(${skinUrl})` }}
+              />
+            )}
+            
+            {/* CAPA 1: ESTRUCTURA */}
+            <Header skinUrl={skinUrl} />
+            
+            <main className={`relative z-10 flex-1 w-full overflow-y-auto pt-14 pb-16 ${skinUrl ? 'bg-gray-950/35' : ''}`}>
+              {children}
+            </main>
+            
+            <Footer skinUrl={skinUrl} />
+            <ModalUsername />
           
-          {/* CAPA 0: EL VITRAL (Debajo de todo) */}
-          {skinUrl && (
-            <div 
-              className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
-              style={{ backgroundImage: `url(${skinUrl})` }}
-            />
-          )}
-          
-          {/* CAPA 1: ESTRUCTURA (Encima del Vitral) */}
-          <Header skinUrl={skinUrl} />
-          
-          {/* 🆕 z-10 para que su bg se vea sobre el Vitral, opacidad condicional */}
-          <main className={`relative z-10 flex-1 w-full overflow-y-auto pt-14 pb-16 ${skinUrl ? 'bg-gray-950/35' : ''}`}>
-            {children}
-          </main>
-          
-          <Footer skinUrl={skinUrl} />
-          <ModalUsername />
-
+          </FacetProvider>
         </AuthProvider>
       </body>
     </html>

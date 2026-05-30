@@ -4,7 +4,7 @@ import ModalCreateShot from "./ModalCreateShot";
 import { useAuth } from "../lib/AuthContext";
 import { hasPermission } from "../lib/roleUtils";
 import { supabase } from "../lib/supabaseClient";
-import { DEFAULT_FACETS, FACET_SLUGS } from "../lib/facetConstants"; // 🆕 IMPORT
+import { useFacets } from "../lib/FacetContext"; // 🆕 IMPORT
 
 interface TagItem {
   id: number;
@@ -31,6 +31,9 @@ export default function Footer({ skinUrl }: { skinUrl: string | null }) {
   const [loadingTags, setLoadingTags] = useState(false);
 
   const [isSingleColumn, setIsSingleColumn] = useState(false);
+
+  // 🆕 LEER FACETAS DEL CONTEXTO
+  const { facets } = useFacets();
 
   const fetchTags = async () => {
     setLoadingTags(true);
@@ -174,8 +177,8 @@ export default function Footer({ skinUrl }: { skinUrl: string | null }) {
                     <div className="text-center py-3 text-gray-500 text-xs animate-pulse">Cargando...</div>
                   ) : (
                     Object.entries(groupedTags).map(([facet, facetTags]) => {
-                      // 🛠️ CAMBIO: Buscar configuración visual desde constantes
-                      const facetConfig = DEFAULT_FACETS.find(f => f.name === facet);
+                      // 🛠️ CAMBIO: Usamos el contexto para encontrar la etiqueta visual
+                      const facetConfig = facets.find(f => f.name === facet);
                       const displayLabel = facetConfig ? `${facetConfig.icon} ${facetConfig.label}` : facet;
 
                       return (

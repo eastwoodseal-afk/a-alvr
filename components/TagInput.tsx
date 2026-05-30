@@ -1,7 +1,8 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { DEFAULT_FACETS, FACET_SLUGS } from "../lib/facetConstants"; // 🆕 IMPORT
+import { useFacets } from "../lib/FacetContext"; // 🆕 IMPORT
+import { FACET_SLUGS } from "../lib/facetConstants"; // Importamos solo los slugs fijos para lógica interna
 
 export interface Tag {
   id?: number;
@@ -16,6 +17,9 @@ interface Props {
 }
 
 export default function TagInput({ selectedTags, onChange }: Props) {
+  // 🆕 LEER DEL CONTEXTO
+  const { facets } = useFacets();
+
   const [search, setSearch] = useState("");
   const [suggestions, setSuggestions] = useState<Tag[]>([]);
   const [allTags, setAllTags] = useState<Tag[]>([]);
@@ -24,7 +28,15 @@ export default function TagInput({ selectedTags, onChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const [createFacet, setCreateFacet] = useState<string>(FACET_SLUGS.FREE); // 🛠️ Usar constante
+  // Usamos el primer faceta del contexto (o FREE por defecto) para la creación
+  const defaultFacet = facets.length > 0 ? facets[0].name : FACET_SLUGS.FREE;
+  const [createFacet, setCreateFacet] = useState<string>(defaultFacet);
+
+  useEffect(() => {
+    if (facets.length > 0 && !createFacet) {
+        setCreateFacet(facets[0].name);
+    }
+  }, [facets]);
 
   useEffect(() => {
     fetchTags();
@@ -91,7 +103,7 @@ export default function TagInput({ selectedTags, onChange }: Props) {
       onChange([...selectedTags, newTag]);
       setSearch("");
       setShowDropdown(false);
-      setCreateFacet(FACET_SLUGS.FREE); // Reset
+      setCreateFacet(defaultFacet); // Reset al default
     }
   };
 
@@ -106,16 +118,16 @@ export default function TagInput({ selectedTags, onChange }: Props) {
     }
   };
 
-  // 🛠️ AGRUPAMIENTO DINÁMICO
+  // 🛠️ AGRUPAMIENTO DINÁMICO DESDE CONTEXTO
   const groupedSuggestions = suggestions.reduce((acc, tag) => {
     if (!acc[tag.facet]) acc[tag.facet] = [];
     acc[tag.facet].push(tag);
     return acc;
   }, {} as Record<string, Tag[]>);
 
-  // Helper para obtener label e icono
+  // Helper para obtener label e icono desde el contexto
   const getFacetDisplay = (facetName: string) => {
-    const found = DEFAULT_FACETS.find(f => f.name === facetName);
+    const found = facets.find(f => f.name === facetName);
     return found ? `${found.icon} ${found.label}` : facetName;
   };
 
@@ -125,7 +137,7 @@ export default function TagInput({ selectedTags, onChange }: Props) {
       <div className="flex flex-wrap items-center gap-1.5 w-full min-h-[40px] bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 cursor-text" onClick={() => inputRef.current?.focus()}>
         
         {selectedTags.map(tag => {
-           const facetDisplay = DEFAULT_FACETS.find(f => f.name === tag.facet);
+           const facetDisplay = facets.find(f => f.name === tag.facet);
            const isFree = tag.facet === FACET_SLUGS.FREE;
            return (
             <span key={tag.slug} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${isFree ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-gray-700 text-gray-200 border border-gray-600'}`}>
@@ -186,7 +198,7 @@ export default function TagInput({ selectedTags, onChange }: Props) {
                       onChange={(e) => setCreateFacet(e.target.value)}
                       className="bg-gray-600 border border-gray-500 rounded px-2 py-1 text-[10px] text-white focus:outline-none focus:ring-1 focus:ring-yellow-500 flex-shrink-0"
                     >
-                      {DEFAULT_FACETS.map(f => (
+                      {facets.map(f => (
                         <option key={f.name} value={f.name}>{f.icon} {f.label}</option>
                       ))}
                     </select>
