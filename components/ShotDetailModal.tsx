@@ -6,11 +6,22 @@ import { useAuth } from "../lib/AuthContext";
 import { useShotInteractions } from "../lib/useShotInteractions";
 import CuratePanel from "./CuratePanel";
 import { Tag } from "../lib/tagUtils";
+import { FACET_SLUGS } from "../lib/facetConstants"; // 🆕 Para filtrar tags
 
 const GHOST_USER_ID = '9e717b49-395c-48d2-add9-7a60ab9c7baf';
 
 interface Shot {
   id: string; image_url: string; title?: string; description?: string; username?: string; user_id?: string; author?: string; likes_count?: number; views_count?: number; uoc_id?: string; uoc_username?: string; category_id?: number | null; category_name?: string; category_slug?: string; source_url?: string; tags?: Tag[];
+  // 🆕 CAMPOS NUEVOS
+  work_name?: string;
+  land_area?: string;
+  construction_area?: string;
+  awards?: string;
+  info_source?: string;
+  objective?: string;
+  functionality?: string;
+  challenges?: string;
+  construction_method?: string;
 }
 
 interface ModalProps {
@@ -171,12 +182,15 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
     </div>
   );
 
+  // 🛠️ HELPER: Determinar si hay datos de ficha técnica para mostrar
+  const hasTechnicalData = currentShot.work_name || currentShot.land_area || currentShot.construction_area || currentShot.awards || currentShot.objective || currentShot.functionality || currentShot.challenges || currentShot.construction_method;
+
   const ShotInfoBlock = () => (
     <>
       {loadingData ? (
         <div className="text-center text-gray-500 text-xs animate-pulse py-4">Cargando datos...</div>
       ) : !curateMode ? (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {/* LAYOUT SPLIT: Autor/Título Izquierda | Interacciones/Perfil Derecha */}
           <div className="flex justify-between items-start gap-4">
             {/* LADO IZQUIERDO */}
@@ -187,7 +201,7 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
             
             {/* LADO DERECHO */}
             <div className="flex flex-col items-end gap-2 flex-shrink-0">
-              {/* FILA 1: UOC, Guardar, Like, Stats (Nivel del Autor) */}
+              {/* FILA 1: UOC, Guardar, Like, Stats */}
               <div className="flex items-center gap-2">
                 {currentShot.uoc_username && uocActive !== null && (
                   <button onClick={() => onOpenCollection?.(currentShot.uoc_id!)} className="flex-shrink-0 bg-green-900/20 border border-green-800/30 rounded-md px-2 py-0.5 text-center hover:bg-green-900/40 transition">
@@ -231,7 +245,7 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
                 </span>
               </div>
               
-              {/* FILA 2: Avatar, Nombre, Seguidores, Seguir (Nivel del Título) */}
+              {/* FILA 2: Avatar, Nombre, Seguir */}
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="w-6 h-6 rounded-full bg-gray-700 overflow-hidden flex items-center justify-center text-[10px] font-bold text-white border border-gray-600 flex-shrink-0">
@@ -256,7 +270,78 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
           {/* Descripción */}
           {currentShot.description && <p className="text-xs text-gray-400 whitespace-pre-wrap leading-relaxed">{currentShot.description}</p>}
           
-          {/* EL SEPARADOR - Mantenido vacío para futuros datos */}
+          {/* 🆕 SECCIÓN: FICHA TÉCNICA */}
+          {hasTechnicalData && (
+            <div className="mt-3 pt-3 border-t border-gray-800 space-y-2">
+              <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Ficha Técnica</h4>
+              
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                {currentShot.work_name && (
+                  <div className="col-span-2 flex justify-between border-b border-gray-800/50 pb-1">
+                    <span className="text-gray-500 font-medium">Obra:</span>
+                    <span className="text-white font-bold text-right">{currentShot.work_name}</span>
+                  </div>
+                )}
+                
+                {currentShot.land_area && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Área Predio:</span>
+                    <span className="text-white">{currentShot.land_area}</span>
+                  </div>
+                )}
+                
+                {currentShot.construction_area && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Área Construcción:</span>
+                    <span className="text-white">{currentShot.construction_area}</span>
+                  </div>
+                )}
+              </div>
+
+              {currentShot.awards && (
+                <div className="bg-yellow-500/5 border border-yellow-500/20 rounded p-2 mt-2">
+                  <span className="text-[10px] text-yellow-400 font-bold block mb-1">🏆 Premios y Reconocimientos</span>
+                  <p className="text-[11px] text-gray-300 italic">{currentShot.awards}</p>
+                </div>
+              )}
+
+              {currentShot.objective && (
+                <div>
+                  <span className="text-gray-500 font-medium text-[10px] block mb-0.5">Objetivo:</span>
+                  <p className="text-gray-300 text-[11px]">{currentShot.objective}</p>
+                </div>
+              )}
+
+              {currentShot.functionality && (
+                <div>
+                  <span className="text-gray-500 font-medium text-[10px] block mb-0.5">Funcionalidad:</span>
+                  <p className="text-gray-300 text-[11px]">{currentShot.functionality}</p>
+                </div>
+              )}
+
+              {currentShot.challenges && (
+                <div>
+                  <span className="text-gray-500 font-medium text-[10px] block mb-0.5">Retos:</span>
+                  <p className="text-gray-300 text-[11px]">{currentShot.challenges}</p>
+                </div>
+              )}
+
+              {currentShot.construction_method && (
+                <div>
+                  <span className="text-gray-500 font-medium text-[10px] block mb-0.5">Método Constructivo:</span>
+                  <p className="text-gray-300 text-[11px]">{currentShot.construction_method}</p>
+                </div>
+              )}
+
+              {currentShot.info_source && (
+                <div className="pt-2 border-t border-gray-800/50">
+                  <span className="text-gray-600 text-[10px] italic block">Fuente: {currentShot.info_source}</span>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* EL SEPARADOR */}
           <div className="mt-2 pt-2 border-t border-gray-800"></div>
           
         </div>
@@ -297,7 +382,7 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
             <div className="px-3 pt-3 pb-2 border-b border-gray-800 flex-shrink-0 flex items-center justify-between gap-2">
               <div className="flex flex-wrap gap-1 min-w-0 flex-1">
                 {currentShot.category_name && (<button onClick={handleCategoryClick} className="px-1 py-0.5 bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-full text-[8px] font-bold hover:bg-blue-600/50 transition cursor-pointer">{currentShot.category_name}</button>)}
-                {currentShot.tags?.map(tag => (tag.id ? <button key={tag.id} onClick={() => handleTagClick(tag)} className="px-1 py-0.5 bg-gray-700 text-gray-300 border border-gray-600 rounded-full text-[8px] font-medium hover:bg-gray-600 transition cursor-pointer">{tag.name}</button> : null))}
+                {currentShot.tags?.filter(t => t.facet !== FACET_SLUGS.OBRA).map(tag => (tag.id ? <button key={tag.id} onClick={() => handleTagClick(tag)} className="px-1 py-0.5 bg-gray-700 text-gray-300 border border-gray-600 rounded-full text-[8px] font-medium hover:bg-gray-600 transition cursor-pointer">{tag.name}</button> : null))}
               </div>
               <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex-shrink-0 ml-2">Relaciones</h4>
             </div>
@@ -327,7 +412,7 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
           <div className="px-4 pt-2 pb-2 border-t border-gray-800 flex items-center justify-between gap-2 sticky top-0 bg-gray-900 z-10">
             <div className="flex flex-wrap gap-1 min-w-0 flex-1">
               {currentShot.category_name && (<button onClick={handleCategoryClick} className="px-1 py-0.5 bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-full text-[8px] font-bold hover:bg-blue-600/50 transition cursor-pointer">{currentShot.category_name}</button>)}
-              {currentShot.tags?.map(tag => (tag.id ? <button key={tag.id} onClick={() => handleTagClick(tag)} className="px-1 py-0.5 bg-gray-700 text-gray-300 border border-gray-600 rounded-full text-[8px] font-medium hover:bg-gray-600 transition cursor-pointer">{tag.name}</button> : null))}
+              {currentShot.tags?.filter(t => t.facet !== FACET_SLUGS.OBRA).map(tag => (tag.id ? <button key={tag.id} onClick={() => handleTagClick(tag)} className="px-1 py-0.5 bg-gray-700 text-gray-300 border border-gray-600 rounded-full text-[8px] font-medium hover:bg-gray-600 transition cursor-pointer">{tag.name}</button> : null))}
             </div>
             <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex-shrink-0 ml-2">Relaciones</h4>
           </div>

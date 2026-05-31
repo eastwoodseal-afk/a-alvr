@@ -2,25 +2,21 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabaseClient";
 import TagInput from "./TagInput";
-import { saveShotTags, autoTagAuthor, Tag } from "../lib/tagUtils";
+import { saveShotTags, autoTagAuthor, autoTagObra, Tag } from "../lib/tagUtils"; // 🆕 autoTagObra
+import { useFacets } from "../lib/FacetContext";
 
 interface Shot {
-  id: string; 
-  image_url: string;
-  title?: string; 
-  description?: string; 
-  username?: string;
-  user_id?: string;
-  author?: string; 
-  likes_count?: number;
-  views_count?: number;
-  uoc_id?: string;
-  uoc_username?: string;
-  category_id?: number | null; 
-  category_name?: string;
-  category_slug?: string;
-  source_url?: string;
-  tags?: Tag[];
+  id: string; image_url: string; title?: string; description?: string; username?: string; user_id?: string; author?: string; likes_count?: number; views_count?: number; uoc_id?: string; uoc_username?: string; category_id?: number | null; category_name?: string; category_slug?: string; source_url?: string; tags?: Tag[];
+  // 🆕 CAMPOS NUEVOS
+  work_name?: string;
+  land_area?: string;
+  construction_area?: string;
+  awards?: string;
+  info_source?: string;
+  objective?: string;
+  functionality?: string;
+  challenges?: string;
+  construction_method?: string;
   is_approved?: boolean | null;
 }
 
@@ -40,9 +36,20 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
   const [editCategoryId, setEditCategoryId] = useState<string>(shot.category_id?.toString() || "");
   const [editTags, setEditTags] = useState<Tag[]>(shot.tags || []);
   
+  // 🆕 ESTADOS PARA NUEVOS CAMPOS
+  const [editWorkName, setEditWorkName] = useState(shot.work_name || "");
+  const [editLandArea, setEditLandArea] = useState(shot.land_area || "");
+  const [editConstructionArea, setEditConstructionArea] = useState(shot.construction_area || "");
+  const [editAwards, setEditAwards] = useState(shot.awards || "");
+  const [editInfoSource, setEditInfoSource] = useState(shot.info_source || "");
+  const [editObjective, setEditObjective] = useState(shot.objective || "");
+  const [editFunctionality, setEditFunctionality] = useState(shot.functionality || "");
+  const [editChallenges, setEditChallenges] = useState(shot.challenges || "");
+  const [editConstructionMethod, setEditConstructionMethod] = useState(shot.construction_method || "");
+
   const [categories, setCategories] = useState<any[]>([]);
   const [editLoading, setEditLoading] = useState(false);
-  const [editError, setEditError] = useState(""); // 🛠️ TIPO STRING IMPLÍCITO
+  const [editError, setEditError] = useState("");
 
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -68,6 +75,16 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
     setNewImageFile(null); 
     setNewImagePreview(null);
     setIsDraggingOver(false);
+    // 🆕 RESET NUEVOS CAMPOS
+    setEditWorkName(shot.work_name || "");
+    setEditLandArea(shot.land_area || "");
+    setEditConstructionArea(shot.construction_area || "");
+    setEditAwards(shot.awards || "");
+    setEditInfoSource(shot.info_source || "");
+    setEditObjective(shot.objective || "");
+    setEditFunctionality(shot.functionality || "");
+    setEditChallenges(shot.challenges || "");
+    setEditConstructionMethod(shot.construction_method || "");
   }, [shot]);
 
   useEffect(() => { fetchCategories(); }, []);
@@ -94,7 +111,7 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
   const handleNewImageSelect = (file: File | null) => {
     if (!file) { setNewImageFile(null); setNewImagePreview(null); return; }
     if (file.size > 5 * 1024 * 1024) { setEditError("La nueva imagen excede 5MB."); return; }
-    setEditError(""); // 🛠️ CURA: String vacío en lugar de null
+    setEditError("");
     setNewImageFile(file);
     const reader = new FileReader();
     reader.onloadend = () => setNewImagePreview(reader.result as string);
@@ -130,10 +147,21 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
       finalImageUrl = publicData.publicUrl;
     }
 
+    // 🛠️ OBJETO DE ACTUALIZACIÓN COMPLETO
     const updateData = { 
       title: editTitle, description: editDescription, author: editAuthor, 
       category_id: editCategoryId ? parseInt(editCategoryId) : null,
-      image_url: finalImageUrl 
+      image_url: finalImageUrl,
+      // 🆕 CAMPOS NUEVOS
+      work_name: editWorkName,
+      land_area: editLandArea,
+      construction_area: editConstructionArea,
+      awards: editAwards,
+      info_source: editInfoSource,
+      objective: editObjective,
+      functionality: editFunctionality,
+      challenges: editChallenges,
+      construction_method: editConstructionMethod
     };
 
     const { error } = await supabase.from('shots').update(updateData).eq('id', shot.id);
@@ -143,6 +171,8 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
     } else {
       await saveShotTags(shot.id, editTags);
       if (editAuthor.trim()) await autoTagAuthor(editAuthor.trim(), shot.id);
+      // 🆕 AUTO-TAG OBRA
+      if (editWorkName.trim()) await autoTagObra(editWorkName.trim(), shot.id);
 
       if (newImageFile && shot.image_url) {
         try {
@@ -172,7 +202,7 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
       });
       const data = await res.json();
       if (res.ok && data.success) { onRelinquish(shot.id); } 
-      else { alert(data.error || "No se pudo eliminar el shot."); }
+      else { alert(data.error || "No se pudo renunciar al shot."); }
     } catch (err) { alert("Error de conexión al eliminar."); } 
     finally { setRelinquishing(false); setConfirmRelinquish(false); }
   };
@@ -209,7 +239,7 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
                 </div>
               ) : (
                 <div className="text-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white mx-auto mb-1"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white mx-auto mb-1"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021.75 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
                   <span className="text-white text-[10px] font-bold">Arrastra o haz clic para reemplazar</span>
                 </div>
               )}
@@ -228,29 +258,73 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
         )}
       </div>
 
-      <input type="text" placeholder="Título" className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" value={editTitle} onChange={e => setEditTitle(e.target.value)} disabled={editLoading || relinquishing} />
-      <input type="text" placeholder="Arquitecto / Estudio" className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" value={editAuthor} onChange={e => setEditAuthor(e.target.value)} disabled={editLoading || relinquishing} />
-      <textarea placeholder="Descripción" className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" rows={3} value={editDescription} onChange={e => setEditDescription(e.target.value)} disabled={editLoading || relinquishing} />
-      
-      {!isAddingCategory ? (
-        <div className="flex gap-2">
-          <select className="flex-1 px-2 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none" value={editCategoryId} onChange={(e) => setEditCategoryId(e.target.value)} disabled={editLoading || relinquishing}>
-            <option value="">Sin Categoría</option>
-            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <button onClick={() => setIsAddingCategory(true)} className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded transition" title="Crear nueva">+</button>
-        </div>
-      ) : (
-        <div className="p-2 bg-gray-800 rounded border border-gray-600 space-y-2">
-          <input type="text" placeholder="Nombre nueva categoría..." value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} className="w-full px-2 py-1 text-xs rounded bg-gray-700 border border-gray-500 text-white focus:outline-none" autoFocus />
-          <div className="flex justify-end gap-2">
-            <button onClick={() => { setIsAddingCategory(false); setNewCategoryName(""); }} className="text-[10px] text-gray-400 hover:text-white">Cancelar</button>
-            <button onClick={handleAddCategory} disabled={savingCategory} className="px-2 py-0.5 bg-yellow-500 text-black text-[10px] font-bold rounded">{savingCategory ? "..." : "Crear"}</button>
-          </div>
-        </div>
-      )}
+      {/* GRID DE DATOS (2 COLUMNAS) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        
+        {/* COLUMNA IZQUIERDA: IDENTIDAD */}
+        <div className="space-y-3">
+            <input type="text" placeholder="Título" className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" value={editTitle} onChange={e => setEditTitle(e.target.value)} disabled={editLoading || relinquishing} />
+            <input type="text" placeholder="Arquitecto / Estudio" className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" value={editAuthor} onChange={e => setEditAuthor(e.target.value)} disabled={editLoading || relinquishing} />
+            
+            {/* 🆕 NOMBRE DE LA OBRA */}
+            <input 
+              type="text" 
+              placeholder="Nombre de la Obra (Genera tag 'Obra/Proyecto')" 
+              className="w-full px-2 py-1.5 rounded bg-gray-800 border border-blue-500/50 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold" 
+              value={editWorkName} 
+              onChange={e => setEditWorkName(e.target.value)} 
+              disabled={editLoading || relinquishing} 
+            />
 
-      <TagInput selectedTags={editTags} onChange={setEditTags} />
+            <textarea placeholder="Descripción" className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" rows={3} value={editDescription} onChange={e => setEditDescription(e.target.value)} disabled={editLoading || relinquishing} />
+            
+            {/* CATEGORIA */}
+            {!isAddingCategory ? (
+              <div className="flex gap-2">
+                <select className="flex-1 px-2 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none" value={editCategoryId} onChange={(e) => setEditCategoryId(e.target.value)} disabled={editLoading || relinquishing}>
+                  <option value="">Sin Categoría</option>
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <button onClick={() => setIsAddingCategory(true)} className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded transition" title="Crear nueva">+</button>
+              </div>
+            ) : (
+              <div className="p-2 bg-gray-800 rounded border border-gray-600 space-y-2">
+                <input type="text" placeholder="Nombre nueva categoría..." value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} className="w-full px-2 py-1 text-xs rounded bg-gray-700 border border-gray-500 text-white focus:outline-none" autoFocus />
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => { setIsAddingCategory(false); setNewCategoryName(""); }} className="text-[10px] text-gray-400 hover:text-white">Cancelar</button>
+                  <button onClick={handleAddCategory} disabled={savingCategory} className="px-2 py-0.5 bg-yellow-500 text-black text-[10px] font-bold rounded">{savingCategory ? "..." : "Crear"}</button>
+                </div>
+              </div>
+            )}
+        </div>
+
+        {/* COLUMNA DERECHA: FICHA TÉCNICA */}
+        <div className="space-y-3">
+            <div className="border-b border-gray-700 pb-1 mb-1 col-span-2">
+                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Ficha Técnica</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+                <input type="text" placeholder="Área Predio (m²)" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editLandArea} onChange={e => setEditLandArea(e.target.value)} disabled={editLoading || relinquishing} />
+                <input type="text" placeholder="Área Construcción (m²)" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editConstructionArea} onChange={e => setEditConstructionArea(e.target.value)} disabled={editLoading || relinquishing} />
+            </div>
+
+            <input type="text" placeholder="Premios y reconocimientos" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editAwards} onChange={e => setEditAwards(e.target.value)} disabled={editLoading || relinquishing} />
+            <input type="text" placeholder="Fuente de información" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editInfoSource} onChange={e => setEditInfoSource(e.target.value)} disabled={editLoading || relinquishing} />
+            
+            <textarea placeholder="Objetivo del proyecto" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" rows={2} value={editObjective} onChange={e => setEditObjective(e.target.value)} disabled={editLoading || relinquishing} />
+            <textarea placeholder="Funcionalidad" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" rows={2} value={editFunctionality} onChange={e => setEditFunctionality(e.target.value)} disabled={editLoading || relinquishing} />
+            <textarea placeholder="Retos principales" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" rows={2} value={editChallenges} onChange={e => setEditChallenges(e.target.value)} disabled={editLoading || relinquishing} />
+            <textarea placeholder="Método de construcción" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" rows={2} value={editConstructionMethod} onChange={e => setEditConstructionMethod(e.target.value)} disabled={editLoading || relinquishing} />
+        </div>
+
+      </div>
+
+      {/* TAGS (Ancho completo abajo) */}
+      <div className="mt-2">
+        <label className="text-[10px] text-gray-500 block mb-1">Etiquetas (Tags):</label>
+        <TagInput selectedTags={editTags} onChange={setEditTags} />
+      </div>
 
       {editError && <div className="text-red-400 text-[10px] text-center">{editError}</div>}
 

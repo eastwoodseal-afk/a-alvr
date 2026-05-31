@@ -89,3 +89,21 @@ export const batchLinkObra = async (shotIds: string[], obraName: string) => {
   }
   return true;
 };
+// ... (imports y otras funciones arriba)
+
+// 🆕 AUTO-TAG PARA OBRA
+export const autoTagObra = async (workName: string, shotId: string) => {
+  if (!workName || !workName.trim()) return;
+  const slug = generateSlug(workName);
+  if (slug.length < 2) return;
+  
+  const { data: isBlacklisted } = await supabase.from('blacklisted_tags').select('slug').eq('slug', slug).maybeSingle();
+  if (isBlacklisted) return;
+  
+  // Usamos FACET_SLUGS.OBRA para asegurar la conexión correcta
+  const tagId = await getOrCreateTag({ name: workName.trim(), slug, facet: FACET_SLUGS.OBRA });
+  if (!tagId) return;
+  
+  const { error: linkError } = await supabase.from('shot_tags').insert({ shot_id: parseInt(shotId), tag_id: tagId });
+  if (linkError && linkError.code !== '23505') console.error("Error vinculando obra:", linkError);
+};
