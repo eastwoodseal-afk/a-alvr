@@ -5,14 +5,15 @@ import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import { useShotInteractions } from "../lib/useShotInteractions";
 import CuratePanel from "./CuratePanel";
+import ProjectTextPanel from "./ProjectTextPanel";
+import TechnicalSheetPanel from "./TechnicalSheetPanel";
 import { Tag } from "../lib/tagUtils";
-import { FACET_SLUGS } from "../lib/facetConstants"; // 🆕 Para filtrar tags
+import { FACET_SLUGS } from "../lib/facetConstants";
 
 const GHOST_USER_ID = '9e717b49-395c-48d2-add9-7a60ab9c7baf';
 
 interface Shot {
   id: string; image_url: string; title?: string; description?: string; username?: string; user_id?: string; author?: string; likes_count?: number; views_count?: number; uoc_id?: string; uoc_username?: string; category_id?: number | null; category_name?: string; category_slug?: string; source_url?: string; tags?: Tag[];
-  // 🆕 CAMPOS NUEVOS
   work_name?: string;
   land_area?: string;
   construction_area?: string;
@@ -22,6 +23,13 @@ interface Shot {
   functionality?: string;
   challenges?: string;
   construction_method?: string;
+  location_type?: string;
+  designers?: string;
+  client?: string;
+  original_use?: string;
+  year?: string;
+  photographer?: string;
+  locality?: string;
 }
 
 interface ModalProps {
@@ -93,6 +101,10 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
     setUocActive(data.uoc_active);
     setRelatedShots(data.related_shots || []);
     
+    if (data.tags) {
+      setCurrentShot(prev => ({ ...prev, tags: data.tags }));
+    }
+    
     setLikesCount(shotData.likes_count || 0);
     setViewsCount(shotData.views_count || 0);
 
@@ -152,6 +164,8 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
     onClose();
   };
 
+  const obraTag = currentShot.tags?.find(tag => tag.facet === FACET_SLUGS.OBRA);
+
   const col1 = relatedShots.filter((_, i) => i % 2 === 0);
   const col2 = relatedShots.filter((_, i) => i % 2 !== 0);
 
@@ -182,26 +196,20 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
     </div>
   );
 
-  // 🛠️ HELPER: Determinar si hay datos de ficha técnica para mostrar
-  const hasTechnicalData = currentShot.work_name || currentShot.land_area || currentShot.construction_area || currentShot.awards || currentShot.objective || currentShot.functionality || currentShot.challenges || currentShot.construction_method;
-
   const ShotInfoBlock = () => (
     <>
       {loadingData ? (
         <div className="text-center text-gray-500 text-xs animate-pulse py-4">Cargando datos...</div>
       ) : !curateMode ? (
         <div className="space-y-3">
-          {/* LAYOUT SPLIT: Autor/Título Izquierda | Interacciones/Perfil Derecha */}
+          {/* LAYOUT SPLIT */}
           <div className="flex justify-between items-start gap-4">
-            {/* LADO IZQUIERDO */}
             <div className="flex-1 min-w-0 space-y-1">
               {currentShot.author && <div className="text-base text-yellow-400 font-bold leading-tight">{currentShot.author}</div>}
               {currentShot.title && <div className="text-sm font-bold text-gray-100 leading-tight">{currentShot.title}</div>}
             </div>
             
-            {/* LADO DERECHO */}
             <div className="flex flex-col items-end gap-2 flex-shrink-0">
-              {/* FILA 1: UOC, Guardar, Like, Stats */}
               <div className="flex items-center gap-2">
                 {currentShot.uoc_username && uocActive !== null && (
                   <button onClick={() => onOpenCollection?.(currentShot.uoc_id!)} className="flex-shrink-0 bg-green-900/20 border border-green-800/30 rounded-md px-2 py-0.5 text-center hover:bg-green-900/40 transition">
@@ -245,7 +253,6 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
                 </span>
               </div>
               
-              {/* FILA 2: Avatar, Nombre, Seguir */}
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="w-6 h-6 rounded-full bg-gray-700 overflow-hidden flex items-center justify-center text-[10px] font-bold text-white border border-gray-600 flex-shrink-0">
@@ -267,81 +274,8 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
             </div>
           </div>
           
-          {/* Descripción */}
           {currentShot.description && <p className="text-xs text-gray-400 whitespace-pre-wrap leading-relaxed">{currentShot.description}</p>}
           
-          {/* 🆕 SECCIÓN: FICHA TÉCNICA */}
-          {hasTechnicalData && (
-            <div className="mt-3 pt-3 border-t border-gray-800 space-y-2">
-              <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Ficha Técnica</h4>
-              
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
-                {currentShot.work_name && (
-                  <div className="col-span-2 flex justify-between border-b border-gray-800/50 pb-1">
-                    <span className="text-gray-500 font-medium">Obra:</span>
-                    <span className="text-white font-bold text-right">{currentShot.work_name}</span>
-                  </div>
-                )}
-                
-                {currentShot.land_area && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Área Predio:</span>
-                    <span className="text-white">{currentShot.land_area}</span>
-                  </div>
-                )}
-                
-                {currentShot.construction_area && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Área Construcción:</span>
-                    <span className="text-white">{currentShot.construction_area}</span>
-                  </div>
-                )}
-              </div>
-
-              {currentShot.awards && (
-                <div className="bg-yellow-500/5 border border-yellow-500/20 rounded p-2 mt-2">
-                  <span className="text-[10px] text-yellow-400 font-bold block mb-1">🏆 Premios y Reconocimientos</span>
-                  <p className="text-[11px] text-gray-300 italic">{currentShot.awards}</p>
-                </div>
-              )}
-
-              {currentShot.objective && (
-                <div>
-                  <span className="text-gray-500 font-medium text-[10px] block mb-0.5">Objetivo:</span>
-                  <p className="text-gray-300 text-[11px]">{currentShot.objective}</p>
-                </div>
-              )}
-
-              {currentShot.functionality && (
-                <div>
-                  <span className="text-gray-500 font-medium text-[10px] block mb-0.5">Funcionalidad:</span>
-                  <p className="text-gray-300 text-[11px]">{currentShot.functionality}</p>
-                </div>
-              )}
-
-              {currentShot.challenges && (
-                <div>
-                  <span className="text-gray-500 font-medium text-[10px] block mb-0.5">Retos:</span>
-                  <p className="text-gray-300 text-[11px]">{currentShot.challenges}</p>
-                </div>
-              )}
-
-              {currentShot.construction_method && (
-                <div>
-                  <span className="text-gray-500 font-medium text-[10px] block mb-0.5">Método Constructivo:</span>
-                  <p className="text-gray-300 text-[11px]">{currentShot.construction_method}</p>
-                </div>
-              )}
-
-              {currentShot.info_source && (
-                <div className="pt-2 border-t border-gray-800/50">
-                  <span className="text-gray-600 text-[10px] italic block">Fuente: {currentShot.info_source}</span>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* EL SEPARADOR */}
           <div className="mt-2 pt-2 border-t border-gray-800"></div>
           
         </div>
@@ -373,8 +307,25 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
             {currentShot.source_url && (
               <a href={currentShot.source_url} target="_blank" rel="noopener noreferrer" className="block text-center text-[9px] text-gray-700 hover:text-gray-400 truncate px-4 py-1 transition bg-gray-950">{currentShot.source_url}</a>
             )}
-            <div className="p-4 flex-1 space-y-2">
+            <div className="p-4 flex-1 space-y-3">
               <ShotInfoBlock />
+              
+              {/* 🆕 PANELES COLAPSABLES */}
+              {obraTag && (
+                <ProjectTextPanel 
+                  obraTag={obraTag}
+                  onUpdated={(newUrl) => {
+                    setCurrentShot(prev => ({
+                      ...prev,
+                      tags: prev.tags?.map(t => 
+                        t.id === obraTag.id ? { ...t, project_file_url: newUrl } : t
+                      )
+                    }));
+                  }}
+                />
+              )}
+              
+              <TechnicalSheetPanel shot={currentShot} />
             </div>
           </div>
 
@@ -406,8 +357,25 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
           {currentShot.source_url && (
             <a href={currentShot.source_url} target="_blank" rel="noopener noreferrer" className="block text-center text-[9px] text-gray-700 hover:text-gray-400 truncate px-4 py-1 transition bg-gray-950">{currentShot.source_url}</a>
           )}
-          <div className="p-4 space-y-2">
+          <div className="p-4 space-y-3">
             <ShotInfoBlock />
+            
+            {/* 🆕 PANELES COLAPSABLES */}
+            {obraTag && (
+              <ProjectTextPanel 
+                obraTag={obraTag}
+                onUpdated={(newUrl) => {
+                  setCurrentShot(prev => ({
+                    ...prev,
+                    tags: prev.tags?.map(t => 
+                      t.id === obraTag.id ? { ...t, project_file_url: newUrl } : t
+                    )
+                  }));
+                }}
+              />
+            )}
+            
+            <TechnicalSheetPanel shot={currentShot} />
           </div>
           <div className="px-4 pt-2 pb-2 border-t border-gray-800 flex items-center justify-between gap-2 sticky top-0 bg-gray-900 z-10">
             <div className="flex flex-wrap gap-1 min-w-0 flex-1">

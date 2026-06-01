@@ -2,12 +2,11 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabaseClient";
 import TagInput from "./TagInput";
-import { saveShotTags, autoTagAuthor, autoTagObra, Tag } from "../lib/tagUtils"; // 🆕 autoTagObra
-import { useFacets } from "../lib/FacetContext";
+import { saveShotTags, autoTagAuthor, autoTagObra, Tag } from "../lib/tagUtils";
 
 interface Shot {
   id: string; image_url: string; title?: string; description?: string; username?: string; user_id?: string; author?: string; likes_count?: number; views_count?: number; uoc_id?: string; uoc_username?: string; category_id?: number | null; category_name?: string; category_slug?: string; source_url?: string; tags?: Tag[];
-  // 🆕 CAMPOS NUEVOS
+  // CAMPOS DE FICHA TÉCNICA
   work_name?: string;
   land_area?: string;
   construction_area?: string;
@@ -17,6 +16,14 @@ interface Shot {
   functionality?: string;
   challenges?: string;
   construction_method?: string;
+  // 🆕 NUEVOS CAMPOS
+  location_type?: string;
+  designers?: string;
+  client?: string;
+  original_use?: string;
+  year?: string;
+  photographer?: string;
+  locality?: string;
   is_approved?: boolean | null;
 }
 
@@ -36,7 +43,7 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
   const [editCategoryId, setEditCategoryId] = useState<string>(shot.category_id?.toString() || "");
   const [editTags, setEditTags] = useState<Tag[]>(shot.tags || []);
   
-  // 🆕 ESTADOS PARA NUEVOS CAMPOS
+  // ESTADOS EXISTENTES
   const [editWorkName, setEditWorkName] = useState(shot.work_name || "");
   const [editLandArea, setEditLandArea] = useState(shot.land_area || "");
   const [editConstructionArea, setEditConstructionArea] = useState(shot.construction_area || "");
@@ -46,6 +53,15 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
   const [editFunctionality, setEditFunctionality] = useState(shot.functionality || "");
   const [editChallenges, setEditChallenges] = useState(shot.challenges || "");
   const [editConstructionMethod, setEditConstructionMethod] = useState(shot.construction_method || "");
+
+  // 🆕 NUEVOS ESTADOS
+  const [editLocationType, setEditLocationType] = useState(shot.location_type || "");
+  const [editDesigners, setEditDesigners] = useState(shot.designers || "");
+  const [editClient, setEditClient] = useState(shot.client || "");
+  const [editOriginalUse, setEditOriginalUse] = useState(shot.original_use || "");
+  const [editYear, setEditYear] = useState(shot.year || "");
+  const [editPhotographer, setEditPhotographer] = useState(shot.photographer || "");
+  const [editLocality, setEditLocality] = useState(shot.locality || "");
 
   const [categories, setCategories] = useState<any[]>([]);
   const [editLoading, setEditLoading] = useState(false);
@@ -75,7 +91,7 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
     setNewImageFile(null); 
     setNewImagePreview(null);
     setIsDraggingOver(false);
-    // 🆕 RESET NUEVOS CAMPOS
+    // RESET CAMPOS EXISTENTES
     setEditWorkName(shot.work_name || "");
     setEditLandArea(shot.land_area || "");
     setEditConstructionArea(shot.construction_area || "");
@@ -85,6 +101,14 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
     setEditFunctionality(shot.functionality || "");
     setEditChallenges(shot.challenges || "");
     setEditConstructionMethod(shot.construction_method || "");
+    // 🆕 RESET NUEVOS CAMPOS
+    setEditLocationType(shot.location_type || "");
+    setEditDesigners(shot.designers || "");
+    setEditClient(shot.client || "");
+    setEditOriginalUse(shot.original_use || "");
+    setEditYear(shot.year || "");
+    setEditPhotographer(shot.photographer || "");
+    setEditLocality(shot.locality || "");
   }, [shot]);
 
   useEffect(() => { fetchCategories(); }, []);
@@ -147,12 +171,12 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
       finalImageUrl = publicData.publicUrl;
     }
 
-    // 🛠️ OBJETO DE ACTUALIZACIÓN COMPLETO
+    // OBJETO DE ACTUALIZACIÓN COMPLETO
     const updateData = { 
       title: editTitle, description: editDescription, author: editAuthor, 
       category_id: editCategoryId ? parseInt(editCategoryId) : null,
       image_url: finalImageUrl,
-      // 🆕 CAMPOS NUEVOS
+      // CAMPOS EXISTENTES
       work_name: editWorkName,
       land_area: editLandArea,
       construction_area: editConstructionArea,
@@ -161,7 +185,15 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
       objective: editObjective,
       functionality: editFunctionality,
       challenges: editChallenges,
-      construction_method: editConstructionMethod
+      construction_method: editConstructionMethod,
+      // 🆕 NUEVOS CAMPOS
+      location_type: editLocationType,
+      designers: editDesigners,
+      client: editClient,
+      original_use: editOriginalUse,
+      year: editYear,
+      photographer: editPhotographer,
+      locality: editLocality
     };
 
     const { error } = await supabase.from('shots').update(updateData).eq('id', shot.id);
@@ -171,7 +203,6 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
     } else {
       await saveShotTags(shot.id, editTags);
       if (editAuthor.trim()) await autoTagAuthor(editAuthor.trim(), shot.id);
-      // 🆕 AUTO-TAG OBRA
       if (editWorkName.trim()) await autoTagObra(editWorkName.trim(), shot.id);
 
       if (newImageFile && shot.image_url) {
@@ -266,7 +297,7 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
             <input type="text" placeholder="Título" className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" value={editTitle} onChange={e => setEditTitle(e.target.value)} disabled={editLoading || relinquishing} />
             <input type="text" placeholder="Arquitecto / Estudio" className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" value={editAuthor} onChange={e => setEditAuthor(e.target.value)} disabled={editLoading || relinquishing} />
             
-            {/* 🆕 NOMBRE DE LA OBRA */}
+            {/* NOMBRE DE LA OBRA */}
             <input 
               type="text" 
               placeholder="Nombre de la Obra (Genera tag 'Obra/Proyecto')" 
@@ -304,17 +335,53 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
                 <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Ficha Técnica</span>
             </div>
 
+            {/* ÁREAS */}
             <div className="grid grid-cols-2 gap-2">
-                <input type="text" placeholder="Área Predio (m²)" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editLandArea} onChange={e => setEditLandArea(e.target.value)} disabled={editLoading || relinquishing} />
+                <input type="text" placeholder="Área Total (m²)" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editLandArea} onChange={e => setEditLandArea(e.target.value)} disabled={editLoading || relinquishing} />
                 <input type="text" placeholder="Área Construcción (m²)" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editConstructionArea} onChange={e => setEditConstructionArea(e.target.value)} disabled={editLoading || relinquishing} />
             </div>
 
+            {/* AÑO Y LOCALIDAD */}
+            <div className="grid grid-cols-2 gap-2">
+                <input type="text" placeholder="Año" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editYear} onChange={e => setEditYear(e.target.value)} disabled={editLoading || relinquishing} />
+                <input type="text" placeholder="Localidad" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editLocality} onChange={e => setEditLocality(e.target.value)} disabled={editLoading || relinquishing} />
+            </div>
+
+            {/* RURAL/URBANO Y USO ORIGINAL */}
+            <div className="grid grid-cols-2 gap-2">
+                <select className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none" value={editLocationType} onChange={e => setEditLocationType(e.target.value)} disabled={editLoading || relinquishing}>
+                    <option value="">Rural o Urbano</option>
+                    <option value="Rural">Rural</option>
+                    <option value="Urbano">Urbano</option>
+                </select>
+                <input type="text" placeholder="Uso Original" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editOriginalUse} onChange={e => setEditOriginalUse(e.target.value)} disabled={editLoading || relinquishing} />
+            </div>
+
+            {/* CLIENTE Y DISEÑADORES */}
+            <div className="grid grid-cols-2 gap-2">
+                <input type="text" placeholder="Cliente" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editClient} onChange={e => setEditClient(e.target.value)} disabled={editLoading || relinquishing} />
+                <input type="text" placeholder="Diseñadores" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editDesigners} onChange={e => setEditDesigners(e.target.value)} disabled={editLoading || relinquishing} />
+            </div>
+
+            {/* FOTÓGRAFO */}
+            <input type="text" placeholder="Fotografía (Fotógrafo)" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editPhotographer} onChange={e => setEditPhotographer(e.target.value)} disabled={editLoading || relinquishing} />
+
+            {/* PREMIOS */}
             <input type="text" placeholder="Premios y reconocimientos" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editAwards} onChange={e => setEditAwards(e.target.value)} disabled={editLoading || relinquishing} />
+            
+            {/* FUENTE */}
             <input type="text" placeholder="Fuente de información" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editInfoSource} onChange={e => setEditInfoSource(e.target.value)} disabled={editLoading || relinquishing} />
             
+            {/* OBJETIVO */}
             <textarea placeholder="Objetivo del proyecto" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" rows={2} value={editObjective} onChange={e => setEditObjective(e.target.value)} disabled={editLoading || relinquishing} />
+            
+            {/* FUNCIONALIDAD */}
             <textarea placeholder="Funcionalidad" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" rows={2} value={editFunctionality} onChange={e => setEditFunctionality(e.target.value)} disabled={editLoading || relinquishing} />
+            
+            {/* RETOS */}
             <textarea placeholder="Retos principales" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" rows={2} value={editChallenges} onChange={e => setEditChallenges(e.target.value)} disabled={editLoading || relinquishing} />
+            
+            {/* MÉTODO CONSTRUCTIVO */}
             <textarea placeholder="Método de construcción" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" rows={2} value={editConstructionMethod} onChange={e => setEditConstructionMethod(e.target.value)} disabled={editLoading || relinquishing} />
         </div>
 
