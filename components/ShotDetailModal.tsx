@@ -307,13 +307,17 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
             {currentShot.source_url && (
               <a href={currentShot.source_url} target="_blank" rel="noopener noreferrer" className="block text-center text-[9px] text-gray-700 hover:text-gray-400 truncate px-4 py-1 transition bg-gray-950">{currentShot.source_url}</a>
             )}
-            <div className="p-4 flex-1 space-y-3">
+            <div className="p-4 flex-1 space-y-4"> {/* Aumenté espacio entre items */}
               <ShotInfoBlock />
               
-              {/* 🆕 PANELES COLAPSABLES */}
+              {/* 🛠️ ORDEN CAMBIADO: FICHA TÉCNICA PRIMERO */}
+              <TechnicalSheetPanel shot={currentShot} />
+
+              {/* 🛠️ TEXTO DEL PROYECTO DESPUÉS */}
               {obraTag && (
                 <ProjectTextPanel 
                   obraTag={obraTag}
+                  canEdit={isOwnShot || isAdmin}
                   onUpdated={(newUrl) => {
                     setCurrentShot(prev => ({
                       ...prev,
@@ -324,8 +328,6 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
                   }}
                 />
               )}
-              
-              <TechnicalSheetPanel shot={currentShot} />
             </div>
           </div>
 
@@ -357,13 +359,17 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
           {currentShot.source_url && (
             <a href={currentShot.source_url} target="_blank" rel="noopener noreferrer" className="block text-center text-[9px] text-gray-700 hover:text-gray-400 truncate px-4 py-1 transition bg-gray-950">{currentShot.source_url}</a>
           )}
-          <div className="p-4 space-y-3">
+          <div className="p-4 space-y-4">
             <ShotInfoBlock />
             
-            {/* 🆕 PANELES COLAPSABLES */}
+            {/* 🛠️ ORDEN CAMBIADO: FICHA TÉCNICA PRIMERO */}
+            <TechnicalSheetPanel shot={currentShot} />
+
+            {/* 🛠️ TEXTO DEL PROYECTO DESPUÉS */}
             {obraTag && (
               <ProjectTextPanel 
                 obraTag={obraTag}
+                canEdit={isOwnShot || isAdmin}
                 onUpdated={(newUrl) => {
                   setCurrentShot(prev => ({
                     ...prev,
@@ -374,8 +380,6 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
                 }}
               />
             )}
-            
-            <TechnicalSheetPanel shot={currentShot} />
           </div>
           <div className="px-4 pt-2 pb-2 border-t border-gray-800 flex items-center justify-between gap-2 sticky top-0 bg-gray-900 z-10">
             <div className="flex flex-wrap gap-1 min-w-0 flex-1">
