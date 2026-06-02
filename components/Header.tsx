@@ -14,7 +14,7 @@ import FollowingOverlay from "./FollowingOverlay";
 import ConfigurationOverlay from "./ConfigurationOverlay";
 
 export default function Header({ skinUrl }: { skinUrl: string | null }) {
-    const { session, user, loading } = useAuth(); 
+  const { session, user, loading } = useAuth(); 
   const router = useRouter();
   const pathname = usePathname();
   
@@ -91,12 +91,34 @@ export default function Header({ skinUrl }: { skinUrl: string | null }) {
     if (action === 'config') setShowConfig(true);
   };
 
+   // 🛠️ FUNCIÓN MANEJADORA DEL LOGO
+  const handleLogoClick = () => {
+    // 1. Si hay algo abierto, ciérralo
+    if (anythingOpen) {
+      closeAllOverlays();
+      return;
+    }
+    
+    // 2. Si ya estamos en /home, recarga completa (como F5)
+    if (pathname === '/home') {
+      window.location.reload(); 
+    } else {
+      // 3. Si estamos en otro lado (ej: carátula), ve a /home
+      router.push('/home');
+    }
+  };
+
   return (
     <>
       <header className={`fixed top-0 left-0 w-full h-14 flex items-center justify-between px-6 shadow z-50 transition-colors duration-500 border-b border-gray-700/50 ${skinUrl ? 'bg-gray-900/40 backdrop-blur-md' : 'bg-gray-900'}`}>
                 <div className="flex flex-col gap-0">
           <div className="flex items-center gap-4">
-            <div className="bg-yellow-500 rounded-full px-2 h-7 text-lg flex items-center gap-0" style={{ fontFamily: 'Times New Roman, Times, serif', fontWeight: 400 }} onClick={() => window.location.href = '/'}>
+            {/* 🛠️ LOGO CON NUEVA LÓGICA */}
+            <div 
+              className="bg-yellow-500 rounded-full px-2 h-7 text-lg flex items-center gap-0 cursor-pointer select-none hover:opacity-90 transition" 
+              style={{ fontFamily: 'Times New Roman, Times, serif', fontWeight: 400 }} 
+              onClick={handleLogoClick}
+            >
               <span className="text-black">A'AL</span><span className="text-gray-500">VR</span>
             </div>
             <span className="hidden sm:inline text-white font-normal text-xs sm:text-sm md:text-base lg:text-lg tracking-wide" style={{ fontFamily: 'Times New Roman, Times, serif', fontWeight: 400, letterSpacing: '0.04em' }}>ATENEO D' ARQUITECTURA LATINOAMERICANA</span>
@@ -110,7 +132,7 @@ export default function Header({ skinUrl }: { skinUrl: string | null }) {
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
           </button>
 
-          <div onClick={() => { if (anythingOpen) closeAllOverlays(); if (pathname !== '/') router.push('/'); }} className="rounded-full h-7 w-7 flex items-center justify-center transition-all duration-200 bg-gray-700 text-gray-200 hover:bg-yellow-500 hover:text-black border border-gray-700 hover:border-yellow-500 cursor-pointer" title="Inicio">
+          <div onClick={() => { if (anythingOpen) closeAllOverlays(); if (pathname !== '/home') router.push('/home'); }} className="rounded-full h-7 w-7 flex items-center justify-center transition-all duration-200 bg-gray-700 text-gray-200 hover:bg-yellow-500 hover:text-black border border-gray-700 hover:border-yellow-500 cursor-pointer" title="Inicio">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M12 4L3 20h18L12 4z" /></svg>
           </div>
 
