@@ -1,11 +1,28 @@
 import { supabase } from "./supabaseClient";
-import { FACET_SLUGS } from "./facetConstants"; // 🆕 IMPORT DE CONSTANTES
+import { FACET_SLUGS } from "./facetConstants";
 
 export interface Tag {
   id?: number;
   name: string;
   slug: string;
   facet: string;
+  project_file_url?: string;
+  // 🆕 CAMPOS DE FICHA TÉCNICA (Añadidos para la migración a Tags)
+  land_area?: string;
+  construction_area?: string;
+  awards?: string;
+  info_source?: string;
+  objective?: string;
+  functionality?: string;
+  challenges?: string;
+  construction_method?: string;
+  location_type?: string;
+  designers?: string;
+  client?: string;
+  original_use?: string;
+  year?: string;
+  photographer?: string;
+  locality?: string;
 }
 
 const generateSlug = (text: string) => text.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
@@ -50,7 +67,6 @@ export const autoTagAuthor = async (authorName: string, shotId: string) => {
   const { data: isBlacklisted } = await supabase.from('blacklisted_tags').select('slug').eq('slug', slug).maybeSingle();
   if (isBlacklisted) return;
   
-  // 🛠️ CAMBIO: Usando constante segura FACET_SLUGS.AUTHOR
   const tagId = await getOrCreateTag({ name: authorName.trim(), slug, facet: FACET_SLUGS.AUTHOR });
   if (!tagId) return;
   const { error: linkError } = await supabase.from('shot_tags').insert({ shot_id: parseInt(shotId), tag_id: tagId });
@@ -64,11 +80,9 @@ export const autoTagBoard = async (boardName: string) => {
   const { data: isBlacklisted } = await supabase.from('blacklisted_tags').select('slug').eq('slug', slug).maybeSingle();
   if (isBlacklisted) return;
   
-  // 🛠️ CAMBIO: Usando constante segura FACET_SLUGS.COLLECTION
   await getOrCreateTag({ name: boardName.trim(), slug, facet: FACET_SLUGS.COLLECTION });
 };
 
-// 🆕 VINCULACIÓN MASIVA A OBRA
 export const batchLinkObra = async (shotIds: string[], obraName: string) => {
   if (!obraName.trim() || shotIds.length === 0) return false;
   
@@ -76,22 +90,19 @@ export const batchLinkObra = async (shotIds: string[], obraName: string) => {
   const { data: isBlacklisted } = await supabase.from('blacklisted_tags').select('slug').eq('slug', slug).maybeSingle();
   if (isBlacklisted) return false;
 
-  // 🛠️ CAMBIO: Usando constante segura FACET_SLUGS.OBRA
   const tagId = await getOrCreateTag({ name: obraName.trim(), slug, facet: FACET_SLUGS.OBRA });
   if (!tagId) return false;
 
   const inserts = shotIds.map(shot_id => ({ shot_id: parseInt(shot_id), tag_id: tagId }));
   const { error } = await supabase.from('shot_tags').insert(inserts);
   
-  if (error && error.code !== '23505') { // Ignorar duplicados
+  if (error && error.code !== '23505') {
     console.error("Error vinculando obra:", error);
     return false;
   }
   return true;
 };
-// ... (imports y otras funciones arriba)
 
-// 🆕 AUTO-TAG PARA OBRA
 export const autoTagObra = async (workName: string, shotId: string) => {
   if (!workName || !workName.trim()) return;
   const slug = generateSlug(workName);
@@ -100,7 +111,6 @@ export const autoTagObra = async (workName: string, shotId: string) => {
   const { data: isBlacklisted } = await supabase.from('blacklisted_tags').select('slug').eq('slug', slug).maybeSingle();
   if (isBlacklisted) return;
   
-  // Usamos FACET_SLUGS.OBRA para asegurar la conexión correcta
   const tagId = await getOrCreateTag({ name: workName.trim(), slug, facet: FACET_SLUGS.OBRA });
   if (!tagId) return;
   

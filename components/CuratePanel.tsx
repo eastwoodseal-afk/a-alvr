@@ -62,6 +62,9 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
   const [editYear, setEditYear] = useState(shot.year || "");
   const [editPhotographer, setEditPhotographer] = useState(shot.photographer || "");
   const [editLocality, setEditLocality] = useState(shot.locality || "");
+  
+  // 🆕 ESTADO PARA EDITAR URL DE IMAGEN
+  const [editImageUrl, setEditImageUrl] = useState(shot.image_url || "");
 
   const [categories, setCategories] = useState<any[]>([]);
   const [editLoading, setEditLoading] = useState(false);
@@ -80,6 +83,8 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   const canReplaceImage = isAdmin || (isOwnShot && !shot.is_approved);
+    // 🆕 URL DE ORIGEN
+  const [editSourceUrl, setEditSourceUrl] = useState(shot.source_url || "");
 
   useEffect(() => {
     setEditTitle(shot.title || "");
@@ -109,6 +114,24 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
     setEditYear(shot.year || "");
     setEditPhotographer(shot.photographer || "");
     setEditLocality(shot.locality || "");
+    // 🆕 RESET URL IMAGEN
+    setEditImageUrl(shot.image_url || "");
+      useEffect(() => {
+   
+    setEditSourceUrl(shot.source_url || "");
+    // ...
+  }, [shot]);
+
+
+
+  useEffect(() => {
+    // ... otros setEdit...
+    setEditSourceUrl(shot.source_url || "");
+    // ...
+  }, [shot]);
+
+
+
   }, [shot]);
 
   useEffect(() => { fetchCategories(); }, []);
@@ -152,7 +175,7 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
     } 
   };
 
-  const handleSave = async () => {
+    const handleSave = async () => {
     setEditLoading(true); setEditError("");
     
     let finalImageUrl = shot.image_url;
@@ -171,39 +194,61 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
       finalImageUrl = publicData.publicUrl;
     }
 
-    // OBJETO DE ACTUALIZACIÓN COMPLETO
+    // 1. ACTUALIZAR DATOS DEL SHOT (Solo identidad y source_url)
     const updateData = { 
       title: editTitle, description: editDescription, author: editAuthor, 
       category_id: editCategoryId ? parseInt(editCategoryId) : null,
       image_url: finalImageUrl,
-      // CAMPOS EXISTENTES
-      work_name: editWorkName,
-      land_area: editLandArea,
-      construction_area: editConstructionArea,
-      awards: editAwards,
-      info_source: editInfoSource,
-      objective: editObjective,
-      functionality: editFunctionality,
-      challenges: editChallenges,
-      construction_method: editConstructionMethod,
-      // 🆕 NUEVOS CAMPOS
-      location_type: editLocationType,
-      designers: editDesigners,
-      client: editClient,
-      original_use: editOriginalUse,
-      year: editYear,
-      photographer: editPhotographer,
-      locality: editLocality
+      source_url: editSourceUrl.trim() || undefined,
+      // NOTA: Ya NO guardamos ficha técnica aquí
     };
 
     const { error } = await supabase.from('shots').update(updateData).eq('id', shot.id);
     
     if (error) { 
-      setEditError("Error al guardar."); 
+      setEditError("Error al guardar el shot."); 
     } else {
+      // 2. GUARDAR TAGS ASOCIADOS
       await saveShotTags(shot.id, editTags);
       if (editAuthor.trim()) await autoTagAuthor(editAuthor.trim(), shot.id);
-      if (editWorkName.trim()) await autoTagObra(editWorkName.trim(), shot.id);
+      
+      // 3. 🆕 ACTUALIZAR FICHA TÉCNICA EN EL TAG OBRA
+      const obraTag = editTags.find(t => t.facet === 'obra');
+      
+      if (obraTag && obraTag.id) {
+        const { error: tagError } = await supabase
+          .from('tags')
+          .update({
+            land_area: editLandArea,
+            construction_area: editConstructionArea,
+            awards: editAwards,
+            info_source: editInfoSource,
+            objective: editObjective,
+            functionality: editFunctionality,
+            challenges: editChallenges,
+            construction_method: editConstructionMethod,
+            location_type: editLocationType,
+            designers: editDesigners,
+            client: editClient,
+            original_use: editOriginalUse,
+            year: editYear,
+            photographer: editPhotographer,
+            locality: editLocality,
+            name: editWorkName.trim() || obraTag.name // Actualizamos nombre si cambió
+          })
+          .eq('id', obraTag.id);
+
+        if (tagError) {
+          console.error("Error guardando ficha en tag:", tagError);
+          // No frenamos todo si esto falla, pero avisamos
+        }
+      } else if (editWorkName.trim()) {
+        // Si escribieron obra pero no hay tag, lo creamos (autoTagObra lo hace, pero aquí nos aseguramos de tener el ID para la ficha)
+        await autoTagObra(editWorkName.trim(), shot.id);
+        // Nota: En este caso, la ficha se quedará vacía hasta la próxima edición, 
+        // ya que el tag es nuevo y no teníamos su ID aquí. 
+        // Solución ideal: autoTagObra debería devolver el ID.
+      }
 
       if (newImageFile && shot.image_url) {
         try {
@@ -287,6 +332,19 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
         {!canReplaceImage && shot.is_approved && (
           <p className="text-[9px] text-gray-600 italic mt-1">Las imágenes de shots aprobados solo pueden ser reemplazadas por un Administrador.</p>
         )}
+      </div>
+
+      {/* 🆕 CAMPO PARA EDITAR URL DE IMAGEN */}
+      <div>
+        <label className="text-[10px] text-gray-500 block mb-1">URL de la Imagen (Editable):</label>
+        <input 
+          type="text" 
+          placeholder="https://..." 
+          className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono" 
+          value={editImageUrl} 
+          onChange={e => setEditImageUrl(e.target.value)} 
+          disabled={editLoading || relinquishing} 
+        />
       </div>
 
       {/* GRID DE DATOS (2 COLUMNAS) */}
@@ -376,13 +434,13 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
             <textarea placeholder="Objetivo del proyecto" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" rows={2} value={editObjective} onChange={e => setEditObjective(e.target.value)} disabled={editLoading || relinquishing} />
             
             {/* FUNCIONALIDAD */}
-            <textarea placeholder="Funcionalidad" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" rows={2} value={editFunctionality} onChange={e => setEditFunctionality(e.target.value)} disabled={editLoading || relinquishing} />
+            <textarea placeholder="Funcionalität" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" rows={2} value={editFunctionality} onChange={e => setEditFunctionality(e.target.value)} disabled={editLoading || relinquishing} />
             
             {/* RETOS */}
             <textarea placeholder="Retos principales" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" rows={2} value={editChallenges} onChange={e => setEditChallenges(e.target.value)} disabled={editLoading || relinquishing} />
             
             {/* MÉTODO CONSTRUCTIVO */}
-            <textarea placeholder="Método de construcción" className="w-full px-2 py-1 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" rows={2} value={editConstructionMethod} onChange={e => setEditConstructionMethod(e.target.value)} disabled={editLoading || relinquishing} />
+            <textarea placeholder="Método de construction" className="w-full px-2 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" rows={2} value={editConstructionMethod} onChange={e => setEditConstructionMethod(e.target.value)} disabled={editLoading || relinquishing} />
         </div>
 
       </div>

@@ -304,16 +304,27 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
               <img src={currentShot.image_url} alt="" className="w-full h-auto max-h-[65vh] object-contain bg-gray-950" />
               <FloatingButtons />
             </div>
+
+            {/* 🛠️ PIE DE FOTO (URL DE ORIGEN) */}
             {currentShot.source_url && (
-              <a href={currentShot.source_url} target="_blank" rel="noopener noreferrer" className="block text-center text-[9px] text-gray-700 hover:text-gray-400 truncate px-4 py-1 transition bg-gray-950">{currentShot.source_url}</a>
+              <div className="px-4 py-2 bg-gray-900 border-b border-gray-800 text-center">
+                <a 
+                  href={currentShot.source_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-[10px] text-gray-600 hover:text-gray-500 transition italic truncate block max-w-full"
+                  title="Ver fuente original"
+                >
+                  Fuente: {currentShot.source_url}
+                </a>
+              </div>
             )}
-            <div className="p-4 flex-1 space-y-4"> {/* Aumenté espacio entre items */}
+
+            <div className="p-4 flex-1 space-y-3">
               <ShotInfoBlock />
               
-              {/* 🛠️ ORDEN CAMBIADO: FICHA TÉCNICA PRIMERO */}
-              <TechnicalSheetPanel shot={currentShot} />
-
-              {/* 🛠️ TEXTO DEL PROYECTO DESPUÉS */}
+              {/* PANELES (Ficha y Texto) */}
+              <TechnicalSheetPanel obraTag={obraTag} />
               {obraTag && (
                 <ProjectTextPanel 
                   obraTag={obraTag}
@@ -356,16 +367,25 @@ export default function ShotDetailModal({ shot, onClose, user, initialIsLiked, i
             <img src={currentShot.image_url} alt="" className="w-full h-auto max-h-[70vh] object-contain bg-gray-950" />
             <FloatingButtons />
           </div>
+
+          {/* 🛠️ PIE DE FOTO (URL DE ORIGEN) */}
           {currentShot.source_url && (
-            <a href={currentShot.source_url} target="_blank" rel="noopener noreferrer" className="block text-center text-[9px] text-gray-700 hover:text-gray-400 truncate px-4 py-1 transition bg-gray-950">{currentShot.source_url}</a>
+            <div className="px-4 py-2 bg-gray-900 border-b border-gray-500 text-center">
+              <a 
+                href={currentShot.source_url} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="text-[10px] text-gray-600 hover:text-gray-500 transition italic truncate block max-w-full"
+              >
+                Fuente: {currentShot.source_url}
+              </a>
+            </div>
           )}
-          <div className="p-4 space-y-4">
+
+          <div className="p-4 space-y-3">
             <ShotInfoBlock />
             
-            {/* 🛠️ ORDEN CAMBIADO: FICHA TÉCNICA PRIMERO */}
-            <TechnicalSheetPanel shot={currentShot} />
-
-            {/* 🛠️ TEXTO DEL PROYECTO DESPUÉS */}
+            <TechnicalSheetPanel obraTag={obraTag} />
             {obraTag && (
               <ProjectTextPanel 
                 obraTag={obraTag}
