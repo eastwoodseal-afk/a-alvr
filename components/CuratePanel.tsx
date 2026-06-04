@@ -86,7 +86,7 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
     // 🆕 URL DE ORIGEN
   const [editSourceUrl, setEditSourceUrl] = useState(shot.source_url || "");
 
-  useEffect(() => {
+    useEffect(() => {
     setEditTitle(shot.title || "");
     setEditDescription(shot.description || "");
     setEditAuthor(shot.author || "");
@@ -106,7 +106,7 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
     setEditFunctionality(shot.functionality || "");
     setEditChallenges(shot.challenges || "");
     setEditConstructionMethod(shot.construction_method || "");
-    // 🆕 RESET NUEVOS CAMPOS
+    // RESET NUEVOS CAMPOS
     setEditLocationType(shot.location_type || "");
     setEditDesigners(shot.designers || "");
     setEditClient(shot.client || "");
@@ -114,25 +114,15 @@ export default function CuratePanel({ shot, isOwnShot, isAdmin, onSave, onCancel
     setEditYear(shot.year || "");
     setEditPhotographer(shot.photographer || "");
     setEditLocality(shot.locality || "");
-    // 🆕 RESET URL IMAGEN
+    // RESET URL IMAGEN
     setEditImageUrl(shot.image_url || "");
-      useEffect(() => {
-   
+    // RESET URL ORIGEN
     setEditSourceUrl(shot.source_url || "");
-    // ...
   }, [shot]);
 
+  
 
 
-  useEffect(() => {
-    // ... otros setEdit...
-    setEditSourceUrl(shot.source_url || "");
-    // ...
-  }, [shot]);
-
-
-
-  }, [shot]);
 
   useEffect(() => { fetchCategories(); }, []);
 
