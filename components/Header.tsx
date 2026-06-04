@@ -30,6 +30,9 @@ export default function Header({ skinUrl }: { skinUrl: string | null }) {
   
   const [savedShotsInitialView, setSavedShotsInitialView] = useState<'all' | null>(null);
 
+  // 🆕 ESTADO PARA EL SHOT RECÍEN CREADO (UI Inmediata)
+  const [pendingShot, setPendingShot] = useState<any | null>(null);
+
   const anythingOpen = showMyShots || showSavedShots || showAdmin || showAbout || showFollowing || showMenu || showLoginModal || showConfig;
 
   const closeAllOverlays = () => {
@@ -53,6 +56,24 @@ export default function Header({ skinUrl }: { skinUrl: string | null }) {
       setShowConfig(false);
     }
   }, [session]);
+
+  // 🆕 LISTENER: Escucha cuando se crea un shot y abre el overlay
+  useEffect(() => {
+    const handleNewShot = (e: any) => {
+      setPendingShot(e.detail || null); // Guardamos el shot nuevo
+      setShowMyShots(true); // Forzamos apertura
+      // Limpiamos cualquier otro overlay abierto
+      setShowSavedShots(false);
+      setShowAdmin(false);
+      setShowAbout(false);
+      setShowFollowing(false);
+      setShowConfig(false);
+      setShowMenu(false);
+    };
+
+    window.addEventListener('navigate-to-my-shots', handleNewShot);
+    return () => window.removeEventListener('navigate-to-my-shots', handleNewShot);
+  }, []);
 
   useEffect(() => {
     if (!showMenu) return;
@@ -189,7 +210,14 @@ export default function Header({ skinUrl }: { skinUrl: string | null }) {
       )}
 
       {showMyShots && session && user && (
-        <MyShotsOverlay userId={user.id} onClose={() => setShowMyShots(false)} />
+        <MyShotsOverlay 
+          userId={user.id} 
+          onClose={() => {
+            setShowMyShots(false);
+            setPendingShot(null); // 🆕 Limpiar al cerrar
+          }}
+          pendingShot={pendingShot} // 🆕 PASAMOS EL SHOT NUEVO
+        />
       )}
 
       {showSavedShots && session && user && (

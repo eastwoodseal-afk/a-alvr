@@ -68,7 +68,7 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
       const { data: publicData } = supabase.storage.from('shots').getPublicUrl(filePath);
       
       const shotData = { user_id: user.id, title, description, image_url: publicData.publicUrl, author: architect.trim() || null };
-      const { data: newShot, error: insertError } = await supabase.from('shots').insert(shotData).select('id').single();
+      const { data: newShot, error: insertError } = await supabase.from('shots').insert(shotData).select('id, title, description, image_url, author, user_id, is_approved, is_rejected, likes_count, views_count').single();
       if (insertError) throw insertError;
       
       if (newShot) {
@@ -76,8 +76,17 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
         if (architect.trim()) await autoTagAuthor(architect.trim(), newShot.id.toString());
       }
       setSuccess("Shot subido correctamente.");
-      // 🆕 NAVEGACIÓN: Disparamos el evento para que el Header abra "Mis Shots"
-      window.dispatchEvent(new CustomEvent('navigate-to-my-shots'));
+      
+      // 🛠️ MODIFICACIÓN: Enviar el objeto completo en el evento
+      if (newShot) {
+        const shotForOverlay = {
+          ...newShot,
+          id: String(newShot.id), // Asegurar string
+          username: user.username, // Añadir username local
+        };
+        window.dispatchEvent(new CustomEvent('navigate-to-my-shots', { detail: shotForOverlay }));
+      }
+      
       setTimeout(() => handleClose(), 1500);
     } catch (err: any) { setError(err.message || "Error al subir."); } finally { setLoading(false); }
   };
@@ -96,7 +105,7 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
         const { data } = supabase.storage.from('shots').getPublicUrl(filePath);
         
         const shotData = { user_id: user.id, title: fileItem.name, description: '', image_url: data.publicUrl, author: architect.trim() || null };
-        const { data: newShot } = await supabase.from('shots').insert(shotData).select('id').single();
+        const { data: newShot } = await supabase.from('shots').insert(shotData).select('id, title, description, image_url, author, user_id, is_approved, is_rejected, likes_count, views_count').single();
         
         if (newShot) {
           await saveShotTags(newShot.id.toString(), selectedTags);
@@ -109,8 +118,8 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
     if (errorCount) setError(`Error en ${errorCount}.`);
     setMultiFiles([]); 
     if (successCount > 0) {
-      // 🆕 NAVEGACIÓN
-      window.dispatchEvent(new CustomEvent('navigate-to-my-shots'));
+      // Nota: En multi-upload no disparamos evento individual para no spamear, 
+      // pero el usuario ya tendrá los shots en su estudio.
       setTimeout(() => handleClose(), 1500);
     }
     setMultiLoading(false);
@@ -142,7 +151,7 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
       if (items[i].type.indexOf('image') !== -1) {
         e.preventDefault();
         const file = items[i].getAsFile();
-        if (file) handlePasteOrDrop(file); // CORREGIDO
+        if (file) handlePasteOrDrop(file); 
         return;
       }
     }
@@ -150,7 +159,8 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (dropZoneRef.current) dropZoneRef.current.classList.add('border-yellow-500', 'bg-gray-700/50'); };
   const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (dropZoneRef.current) dropZoneRef.current.classList.remove('border-yellow-500', 'bg-gray-700/50'); };
-  const handleDrop = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (dropZoneRef.current) dropZoneRef.current.classList.remove('border-yellow-500', 'bg-gray-700/50'); handlePasteOrDrop(e.dataTransfer.files[0]); }; // CORREGIDO
+  const handleDrop = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (dropZoneRef.current) dropZoneRef.current.classList.remove('border-yellow-500', 'bg-gray-700/50'); handlePasteOrDrop(e.dataTransfer.files[0]); }; 
+  
   const handleDirectIngestSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(null); setSuccess(null);
     if (!sourceUrl.trim()) { setError("La URL de origen es obligatoria para dar crédito."); return; }
@@ -172,15 +182,24 @@ export default function ModalCreateShot({ open, section, onClose }: ModalCreateS
       }
       if (finalImageUrl) {
         const shotData = { user_id: user.id, title: title.trim() || "Sin título", description, image_url: finalImageUrl, author: architect.trim() || null, source_url: sourceUrl.trim() };
-        const { data: newShot, error: insertError } = await supabase.from('shots').insert(shotData).select('id').single();
+        const { data: newShot, error: insertError } = await supabase.from('shots').insert(shotData).select('id, title, description, image_url, author, user_id, is_approved, is_rejected, likes_count, views_count').single();
         if (insertError) throw insertError;
         if (newShot) {
           await saveShotTags(newShot.id.toString(), selectedTags);
           if (architect.trim()) await autoTagAuthor(architect.trim(), newShot.id.toString());
         }
         setSuccess("Shot preservado con crédito.");
-        // 🆕 NAVEGACIÓN
-        window.dispatchEvent(new CustomEvent('navigate-to-my-shots'));
+        
+        // 🛠️ MODIFICACIÓN: Enviar el objeto completo
+        if (newShot) {
+          const shotForOverlay = {
+            ...newShot,
+            id: String(newShot.id),
+            username: user.username,
+          };
+          window.dispatchEvent(new CustomEvent('navigate-to-my-shots', { detail: shotForOverlay }));
+        }
+        
         setTimeout(() => handleClose(), 1500);
       }
     } catch (err: any) { setError(err.response?.data?.error || err.message || "Error al importar la imagen."); } finally { setLoading(false); }

@@ -16,16 +16,15 @@ export default function CoverPage() {
       {/* Contenedor Central */}
       <div className="flex flex-col items-center gap-6 animate-fade-in">
         
-        {/* LOGO GRANDE (Iniciales) */}
+        {/* 1. LOGO A'AL (GRANDE) */}
         <div 
-          className="text-[80px] md:text-[140px] font-normal leading-none tracking-tighter transition-transform duration-300 group-hover:scale-105" 
+          className="text-[120px] md:text-[200px] font-normal leading-none tracking-tighter transition-transform duration-300 group-hover:scale-105" 
           style={{ fontFamily: "'Times New Roman', Times, serif" }}
         >
           <span className="text-yellow-500">A'AL</span>
-          <span className="text-gray-600">VR</span>
         </div>
 
-        {/* Texto Delimitado (Alineado al ancho visual del logo) */}
+        {/* 2. TEXTO CENTRAL */}
         <div className="text-center px-4 w-full max-w-[320px] md:max-w-[480px]">
           <div 
             className="text-[14px] md:text-[18px] text-gray-300 tracking-[0.05em] uppercase leading-tight" 
@@ -34,7 +33,7 @@ export default function CoverPage() {
             ATENEO D' ARQUITECTURA LATINOAMERICANA
           </div>
           
-          {/* Línea divisoria opcional */}
+          {/* Línea divisoria */}
           <div className="w-full h-[1px] bg-gray-800 my-3"></div>
           
           <div 
@@ -44,6 +43,15 @@ export default function CoverPage() {
             VALOR Y REGISTRO
           </div>
         </div>
+
+        {/* 3. VR (GRANDE) */}
+        <div 
+          className="text-[120px] md:text-[200px] font-normal leading-none tracking-tighter transition-transform duration-300 group-hover:scale-105" 
+          style={{ fontFamily: "'Times New Roman', Times, serif" }}
+        >
+          <span className="text-gray-600">VR</span>
+        </div>
+
       </div>
       
       {/* Indicador sutil de "Click" */}

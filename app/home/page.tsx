@@ -136,7 +136,8 @@ export default function Home() {
         source_url: s.source_url || null
       }));
       
-      const shuffled = shuffleArray(processed);
+      // Nota: El shuffle se aplica solo en la carga inicial o filtros para no romper la paginación infinita
+      const shuffled = pageNum === 0 ? shuffleArray(processed) : processed;
       
       if (pageNum === 0) setShots(shuffled);
       else setShots(prev => [...prev, ...shuffled]);
@@ -148,6 +149,65 @@ export default function Home() {
     isFetchingRef.current = false;
     setLoading(false);
   }, []);
+
+  // 🆕 REALTIME: Inyección de shots aprobados
+  useEffect(() => {
+    if (!session) return; 
+
+    const channel = supabase
+      .channel('realtime-public-shots-wall')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'shots', filter: 'is_approved=eq.true' },
+        async (payload) => {
+          const newShot = payload.new as any;
+          
+          // Evitar duplicados
+          if (shots.some(s => s.id === String(newShot.id))) return;
+
+          // Si hay filtros activos, no inyectamos (respetamos el filtro)
+          if (categoryFilter || tagFilter) return;
+
+          // Fetch completo para obtener relaciones (username, tags)
+          const { data: fullShot } = await supabase
+            .from('shots')
+            .select(`id, title, description, image_url, author, likes_count, views_count, user_id, uoc_id, uoc_username, category_id, source_url, profiles!shots_user_id_fkey ( username ), categories ( name, slug ), shot_tags ( tags ( id, name, slug, facet ) )`)
+            .eq('id', newShot.id)
+            .single();
+
+          if (fullShot) {
+            // 🛠️ FIX: Acceso seguro a tipos que pueden venir como array u objeto
+            const profileData = Array.isArray(fullShot.profiles) ? fullShot.profiles[0] : fullShot.profiles;
+            const categoryData = Array.isArray(fullShot.categories) ? fullShot.categories[0] : fullShot.categories;
+
+            const processed = {
+              ...fullShot,
+              id: String(fullShot.id),
+              username: profileData?.username || "Anónimo",
+              tags: fullShot.shot_tags?.map((st: any) => st.tags).filter(Boolean) || [],
+              category_name: categoryData?.name || null,
+              category_slug: categoryData?.slug || null
+            };
+            // Inyectar al principio
+            setShots(prev => [processed, ...prev]);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'shots', filter: 'is_approved=eq.false' },
+        (payload) => {
+          // Remover del muro si fue desaprobado
+          const oldId = String(payload.new.id);
+          setShots(prev => prev.filter(s => s.id !== oldId));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session, shots, categoryFilter, tagFilter]);
 
   useEffect(() => {
     async function fetchUserInteractions() {

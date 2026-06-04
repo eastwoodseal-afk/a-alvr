@@ -19,9 +19,10 @@ const BATCH_SIZE = 20;
 interface Props {
   userId: string;
   onClose: () => void;
+  pendingShot?: Shot | null; // 🆕 PROP: El shot recién creado
 }
 
-export default function MyShotsOverlay({ userId, onClose }: Props) {
+export default function MyShotsOverlay({ userId, onClose, pendingShot }: Props) {
   const { user } = useAuth();
   const [shots, setShots] = useState<Shot[]>([]);
   const [loading, setLoading] = useState(false);
@@ -45,7 +46,7 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [modalSection, setModalSection] = useState<number | null>(null);
 
-  // 🆕 FILTRO DE ESTADO
+  // FILTRO DE ESTADO
   const [statusFilter, setStatusFilter] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
 
@@ -73,6 +74,17 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
   }, [userId]);
 
   useEffect(() => { if (userId) fetchMyShots(0); }, [userId]);
+
+  // 🆕 EFECTO: Inyectar el shot nuevo inmediatamente (UI Optimista)
+  useEffect(() => {
+    if (pendingShot) {
+      // Lo añadimos al principio de la lista si no existe ya
+      setShots(prev => {
+        if (prev.some(s => s.id === pendingShot.id)) return prev;
+        return [pendingShot, ...prev];
+      });
+    }
+  }, [pendingShot]);
 
   useEffect(() => {
     async function fetchUserInteractions() {
@@ -133,7 +145,7 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
 
   const isObraCellActive = selectedShots.length > 0;
 
-  // 🆕 FILTRADO DE SHOTS
+  // FILTRADO DE SHOTS
   const filteredShots = shots.filter(shot => {
     if (statusFilter === 'all') return true;
     if (statusFilter === 'approved') return shot.is_approved === true;
@@ -225,7 +237,7 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
 
         <div className="flex-1" />
 
-        {/* 🆕 BOTÓN DE FILTRO */}
+        {/* BOTÓN DE FILTRO */}
         <div className="relative flex-shrink-0">
           <button 
             id="my-shots-filter-btn"
@@ -308,12 +320,12 @@ export default function MyShotsOverlay({ userId, onClose }: Props) {
         {filteredShots.length > 0 && (
           <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-6 gap-2 w-full">
             {filteredShots.map(shot => {
-              // 🆕 LÓGICA DE COLORES
+              // LÓGICA DE COLORES
               let statusBorder = "border border-gray-700/30";
               if (shot.is_approved === true) {
                 statusBorder = "border-2 border-green-500/60";
               } else if (shot.is_rejected === true) {
-                statusBorder = "border-2 border-purple-500/60"; // 🆕 PÚRPURA
+                statusBorder = "border-2 border-purple-500/60"; // PÚRPURA
               } else {
                 statusBorder = "border-2 border-red-500/60"; // Rojo = pendiente
               }
